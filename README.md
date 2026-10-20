@@ -163,6 +163,25 @@ iOS 16.1, so the workflow now downloads and selects the iPhoneOS 16.5 SDK
 explicitly for the next verification run. This remains a compile-only check;
 it does not produce an IPA, install anything, or validate a jailbreak.
 
+### Experimental A15 UI diagnostic
+
+On the exact `iPhone14,2` / A15 / iOS 26.0.1 build `23A355`, the main screen
+now exposes two separate actions: the existing `A15ACTIVE diagnostic` and
+`Experimental jailbreak (A15)`. The latter shows an explicit warning, starts
+only the normal-path compatibility and prerequisite trace, and stops at the
+first proven blocker. It does not instantiate `DOJailbreaker`, load an exploit,
+submit a nonempty MDSID record, access MMIO or physical memory, modify
+SPTM/PAPT state, change privileges, or install a bootstrap.
+
+Each trace event contains a normalized `result` (`PASS`, `FAIL`, `BLOCKED` or
+`NOT_TESTED`) in addition to its raw status and evidence. The diagnostic report
+also records a session ID, component, monotonic elapsed nanoseconds and total
+duration. It is written to `Documents/a15-ios26-diagnostic-v6.json`. The final screen uses
+`DOLogCrashViewController`, so the captured log can be reviewed and exported;
+it is deliberately presented as blocked diagnostic output, never as jailbreak
+success. This UI path is not a device validation and does not change the
+behavior of officially supported devices.
+
 Deployment order:
 
 1. Trigger the private GitHub Actions workflow manually for one exact commit;

@@ -119,7 +119,13 @@ def main() -> int:
     )
     require("Research_Stage_OSDictionary" in settings, "missing OSDictionary status")
     require("Research_Stage_IORVBAR" in settings, "missing in-app research status")
-    require("Research_Button_Run" in main_view, "missing research diagnostic button")
+    require("Research_Active_Button" in main_view, "missing A15ACTIVE diagnostic button")
+    require("Research_Experimental_Button" in main_view, "missing experimental A15 diagnostic button")
+    require(
+        "startExperimentalA15JailbreakDiagnostic" in main_view
+        and "Research_Experimental_Warning" in main_view,
+        "missing experimental diagnostic warning flow",
+    )
     require(
         "[self startA15ActiveTitanProbe]" in main_view,
         "exact research target does not route to the active Titan probe",
@@ -251,6 +257,12 @@ def main() -> int:
         '@"exploit_matrix": exploitMatrix',
         '@"jailbreak_dry_run": jailbreakDryRun',
         '@"mode": @"selection-and-precondition-trace-only"',
+        'A15ResearchResultForStatus',
+        '@"session_id": sessionID',
+        '@"component": component',
+        '@"elapsed_ns": @(elapsedNs)',
+        '@"duration_ns": @(reportDurationNs)',
+        '@"result": result',
         '@"actual_entrypoint_called": @NO',
         '@"gather_system_information_called": @NO',
         '@"xpf_started": @NO',

@@ -20,6 +20,7 @@
 #import <os/log.h>
 #import <pthread.h>
 #import <sys/sysctl.h>
+#import <time.h>
 #import <unistd.h>
 #import <libjailbreak/libjailbreak.h>
 
@@ -27,11 +28,51 @@
 
 @property DOJailbreakButton *jailbreakBtn;
 @property NSArray<NSLayoutConstraint *> *jailbreakButtonConstraints;
+@property DOJailbreakButton *experimentalJailbreakBtn;
+@property NSArray<NSLayoutConstraint *> *experimentalJailbreakButtonConstraints;
+@property DOActionMenuView *actionView;
 @property DOActionMenuButton *updateButton;
 @property(nonatomic) BOOL hideStatusBar;
 @property(nonatomic) BOOL hideHomeIndicator;
 
+- (void)startExperimentalA15JailbreakDiagnostic;
+
 @end
+
+static NSString *A15ResearchResultForStatus(NSString *status)
+{
+    if ([status isEqualToString:@"PASS"] ||
+        [status isEqualToString:@"OBSERVED"] ||
+        [status isEqualToString:@"AVAILABLE"] ||
+        [status isEqualToString:@"INSPECTED"] ||
+        [status isEqualToString:@"PRECONDITION_READY"] ||
+        [status isEqualToString:@"METADATA_SELECTED"] ||
+        [status isEqualToString:@"METADATA_ELIGIBLE"] ||
+        [status isEqualToString:@"METADATA_CHAIN_COMPLETE"] ||
+        [status isEqualToString:@"NOT_REQUIRED"]) {
+        return @"PASS";
+    }
+    if ([status isEqualToString:@"FAIL"] ||
+        [status isEqualToString:@"INVALID"] ||
+        [status isEqualToString:@"UNEXPECTED"]) {
+        return @"FAIL";
+    }
+    if ([status isEqualToString:@"BLOCKED"] ||
+        [status isEqualToString:@"REJECTED"] ||
+        [status isEqualToString:@"MISSING"] ||
+        [status isEqualToString:@"METADATA_MISSING"] ||
+        [status isEqualToString:@"UNRESOLVED"]) {
+        return @"BLOCKED";
+    }
+    return @"NOT_TESTED";
+}
+
+static uint64_t A15ResearchMonotonicNanoseconds(void)
+{
+    struct timespec time = {0};
+    if (clock_gettime(CLOCK_MONOTONIC, &time) != 0) return 0;
+    return ((uint64_t)time.tv_sec * NSEC_PER_SEC) + (uint64_t)time.tv_nsec;
+}
 
 @implementation DOMainViewController
 
@@ -93,7 +134,7 @@
     ]];
     
     //Action Menu
-    DOActionMenuView *actionView = [[DOActionMenuView alloc] initWithActions:@[
+    self.actionView = [[DOActionMenuView alloc] initWithActions:@[
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Settings_Title") image:[UIImage systemImageNamed:@"gearshape" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"settings" handler:^(__kindof UIAction * _Nonnull action) {
             [self.navigationController pushViewController:[[DOSettingsController alloc] init] animated:YES];
         }],
@@ -112,26 +153,26 @@
         }]
     ] delegate:self];
     
-    [stackView addArrangedSubview: actionView];
+    [stackView addArrangedSubview:self.actionView];
 
     [NSLayoutConstraint activateConstraints:@[
-        [actionView.leadingAnchor constraintEqualToAnchor:stackView.leadingAnchor],
-        [actionView.trailingAnchor constraintEqualToAnchor:stackView.trailingAnchor],
+        [self.actionView.leadingAnchor constraintEqualToAnchor:stackView.leadingAnchor],
+        [self.actionView.trailingAnchor constraintEqualToAnchor:stackView.trailingAnchor],
     ]];
     
     
-    UIView *buttonPlaceHolder = [[UIView alloc] init];
-    [buttonPlaceHolder setTranslatesAutoresizingMaskIntoConstraints:NO];
-    [stackView addArrangedSubview:buttonPlaceHolder];
-    [NSLayoutConstraint activateConstraints:@[
-        [buttonPlaceHolder.heightAnchor constraintEqualToConstant:60]
-    ]];
-    
-    //Jailbreak Button
     BOOL isJailbroken = [[DOEnvironmentManager sharedManager] isJailbroken] || [[DOEnvironmentManager sharedManager] isJailbrokenWithOtherJailbreak];
     BOOL isSupported = [[DOEnvironmentManager sharedManager] isSupported];
     BOOL isResearchTarget = [[DOEnvironmentManager sharedManager] isA15IOS2601ResearchTarget];
 
+    UIView *buttonPlaceHolder = [[UIView alloc] init];
+    [buttonPlaceHolder setTranslatesAutoresizingMaskIntoConstraints:NO];
+    [stackView addArrangedSubview:buttonPlaceHolder];
+    [NSLayoutConstraint activateConstraints:@[
+        [buttonPlaceHolder.heightAnchor constraintEqualToConstant:isResearchTarget ? 124 : 60]
+    ]];
+    
+    //Jailbreak Button
     NSString *jailbreakButtonTitle = [self jailbreakButtonTitle];
         
     UIImage *jailbreakButtonImage;
@@ -143,7 +184,7 @@
         jailbreakButtonImage = [UIImage systemImageNamed:@"lock.slash" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]];
     
     self.jailbreakBtn = [[DOJailbreakButton alloc] initWithAction: [UIAction actionWithTitle:jailbreakButtonTitle image:jailbreakButtonImage identifier:@"jailbreak" handler:^(__kindof UIAction * _Nonnull action) {
-        [actionView hide];
+        [self.actionView hide];
         [self.jailbreakBtn expandButton: self.jailbreakButtonConstraints];
 
         self.updateButton.userInteractionEnabled = NO;
@@ -164,12 +205,39 @@
 
     [self.view addSubview:self.jailbreakBtn];
 
-    [NSLayoutConstraint activateConstraints:(self.jailbreakButtonConstraints = @[
+    NSMutableArray<NSLayoutConstraint *> *jailbreakConstraints = [NSMutableArray arrayWithArray:@[
         [self.jailbreakBtn.leadingAnchor constraintEqualToAnchor:stackView.leadingAnchor],
         [self.jailbreakBtn.trailingAnchor constraintEqualToAnchor:stackView.trailingAnchor],
-        [self.jailbreakBtn.heightAnchor constraintEqualToAnchor:buttonPlaceHolder.heightAnchor],
-        [self.jailbreakBtn.centerYAnchor constraintEqualToAnchor:buttonPlaceHolder.centerYAnchor]
-    ])];
+        [self.jailbreakBtn.heightAnchor constraintEqualToConstant:60],
+    ]];
+    if (isResearchTarget) {
+        [jailbreakConstraints addObject:[self.jailbreakBtn.topAnchor constraintEqualToAnchor:buttonPlaceHolder.topAnchor]];
+    }
+    else {
+        [jailbreakConstraints addObject:[self.jailbreakBtn.centerYAnchor constraintEqualToAnchor:buttonPlaceHolder.centerYAnchor]];
+    }
+    self.jailbreakButtonConstraints = jailbreakConstraints;
+    [NSLayoutConstraint activateConstraints:self.jailbreakButtonConstraints];
+
+    if (isResearchTarget) {
+        __weak typeof(self) weakSelf = self;
+        self.experimentalJailbreakBtn = [[DOJailbreakButton alloc] initWithAction:
+            [UIAction actionWithTitle:DOLocalizedString(@"Research_Experimental_Button")
+                                image:[UIImage systemImageNamed:@"bolt.horizontal.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]]
+                           identifier:@"experimental-a15-jailbreak"
+                              handler:^(__kindof UIAction * _Nonnull action) {
+            [weakSelf startExperimentalA15JailbreakDiagnostic];
+        }]];
+        self.experimentalJailbreakBtn.enabled = !isJailbroken;
+        [self.view addSubview:self.experimentalJailbreakBtn];
+        self.experimentalJailbreakButtonConstraints = @[
+            [self.experimentalJailbreakBtn.leadingAnchor constraintEqualToAnchor:stackView.leadingAnchor],
+            [self.experimentalJailbreakBtn.trailingAnchor constraintEqualToAnchor:stackView.trailingAnchor],
+            [self.experimentalJailbreakBtn.heightAnchor constraintEqualToConstant:60],
+            [self.experimentalJailbreakBtn.topAnchor constraintEqualToAnchor:buttonPlaceHolder.topAnchor constant:64],
+        ];
+        [NSLayoutConstraint activateConstraints:self.experimentalJailbreakButtonConstraints];
+    }
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.1 * NSEC_PER_SEC), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
         if ([[DOUIManager sharedInstance] environmentUpdateAvailable])
@@ -219,7 +287,7 @@
 
     NSString *jailbreakButtonTitle = DOLocalizedString(@"Button_Jailbreak_Title");
     if (isResearchTarget)
-        jailbreakButtonTitle = DOLocalizedString(@"Research_Button_Run");
+        jailbreakButtonTitle = DOLocalizedString(@"Research_Active_Button");
     else if (!isSupported)
         jailbreakButtonTitle = DOLocalizedString(@"Unsupported");
     else if (isJailbroken)
@@ -228,6 +296,33 @@
         jailbreakButtonTitle = DOLocalizedString(@"Button_Remove_Jailbreak");
     
     return jailbreakButtonTitle;
+}
+
+- (void)startExperimentalA15JailbreakDiagnostic
+{
+    if (![[DOEnvironmentManager sharedManager] isA15IOS2601ResearchTarget]) {
+        [self emitResearchDiagnosticEvent:@"checkpoint=target.identity result=BLOCKED status=BLOCKED evidence=target-not-supported"];
+        return;
+    }
+
+    UIAlertController *warning = [UIAlertController
+        alertControllerWithTitle:DOLocalizedString(@"Research_Experimental_Title")
+                         message:DOLocalizedString(@"Research_Experimental_Warning")
+                  preferredStyle:UIAlertControllerStyleAlert];
+    [warning addAction:[UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Close")
+                                                 style:UIAlertActionStyleCancel
+                                               handler:nil]];
+    [warning addAction:[UIAlertAction actionWithTitle:DOLocalizedString(@"Continue")
+                                                 style:UIAlertActionStyleDestructive
+                                               handler:^(__kindof UIAlertAction * _Nonnull action) {
+        [self.actionView hide];
+        [self.experimentalJailbreakBtn expandButton:self.experimentalJailbreakButtonConstraints];
+        self.jailbreakBtn.enabled = NO;
+        self.experimentalJailbreakBtn.enabled = NO;
+        self.updateButton.userInteractionEnabled = NO;
+        [self startResearchDiagnostics];
+    }]];
+    [self presentViewController:warning animated:YES completion:nil];
 }
 
 - (void)emitResearchDiagnosticEvent:(NSString *)event
@@ -241,23 +336,35 @@
 {
     DOEnvironmentManager *environment = [DOEnvironmentManager sharedManager];
     if (![environment isA15IOS2601ResearchTarget]) {
-        [self emitResearchDiagnosticEvent:@"checkpoint=target.identity status=REJECTED"];
+        [self emitResearchDiagnosticEvent:@"checkpoint=target.identity result=BLOCKED status=REJECTED evidence=target-not-supported"];
         return;
     }
 
     [[DOUIManager sharedInstance] startLogCapture];
     self.jailbreakBtn.enabled = NO;
+    self.experimentalJailbreakBtn.enabled = NO;
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *sessionID = [NSUUID UUID].UUIDString;
+        NSString *component = @"normal-jailbreak.compatibility-dry-run";
+        uint64_t sessionStartNs = A15ResearchMonotonicNanoseconds();
         NSMutableArray<NSDictionary *> *events = [NSMutableArray new];
         void (^record)(NSString *, NSString *, NSString *) = ^(NSString *checkpoint, NSString *status, NSString *evidence) {
+            NSString *rawStatus = status ?: @"NOT_TESTED";
+            NSString *result = A15ResearchResultForStatus(rawStatus);
+            uint64_t nowNs = A15ResearchMonotonicNanoseconds();
+            uint64_t elapsedNs = nowNs >= sessionStartNs ? nowNs - sessionStartNs : 0;
             NSDictionary *event = @{
+                @"session_id": sessionID,
+                @"component": component,
                 @"checkpoint": checkpoint,
-                @"status": status,
-                @"evidence": evidence,
+                @"status": rawStatus,
+                @"result": result,
+                @"evidence": evidence ?: @"",
+                @"elapsed_ns": @(elapsedNs),
             };
             [events addObject:event];
-            [self emitResearchDiagnosticEvent:[NSString stringWithFormat:@"checkpoint=%@ status=%@ evidence=%@", checkpoint, status, evidence]];
+            [self emitResearchDiagnosticEvent:[NSString stringWithFormat:@"session=%@ component=%@ checkpoint=%@ result=%@ status=%@ elapsed_ns=%llu evidence=%@", sessionID, component, checkpoint, result, rawStatus, (unsigned long long)elapsedNs, evidence ?: @""]];
         };
 
         record(@"target.identity", @"OBSERVED", @"iPhone14,2/A15/iOS-26.0.1/23A355");
@@ -285,17 +392,19 @@
             }
             return nil;
         };
-        NSDictionary<NSString *, NSArray<NSString *> *> *artifactNames = @{
-            @"kernel.static_artifact": @[@"kernelcache"],
-            @"sptm.static_artifact": @[@"sptm.img4", @"sptm.im4p"],
-            @"txm.static_artifact": @[@"txm.img4", @"txm.im4p"],
-        };
+        NSArray<NSDictionary *> *artifactChecks = @[
+            @{ @"checkpoint": @"kernel.static_artifact", @"names": @[@"kernelcache"] },
+            @{ @"checkpoint": @"sptm.static_artifact", @"names": @[@"sptm.img4", @"sptm.im4p"] },
+            @{ @"checkpoint": @"txm.static_artifact", @"names": @[@"txm.img4", @"txm.im4p"] },
+        ];
         NSMutableDictionary<NSString *, id> *artifactLocations = [NSMutableDictionary new];
-        [artifactNames enumerateKeysAndObjectsUsingBlock:^(NSString *checkpoint, NSArray<NSString *> *names, BOOL *stop) {
+        for (NSDictionary *artifactCheck in artifactChecks) {
+            NSString *checkpoint = artifactCheck[@"checkpoint"];
+            NSArray<NSString *> *names = artifactCheck[@"names"];
             NSString *location = artifactLocation(names);
             artifactLocations[checkpoint] = location ?: [NSNull null];
             record(checkpoint, location ? @"AVAILABLE" : @"MISSING", location ?: @"not-packaged-or-in-Documents");
-        }];
+        }
 
         NSString *targetVersion = @"26.0.1";
         NSString *targetBuild = @"23A355";
@@ -600,15 +709,17 @@
         BOOL staticInputsPresent = artifactLocations[@"kernel.static_artifact"] != [NSNull null] &&
             artifactLocations[@"sptm.static_artifact"] != [NSNull null] &&
             artifactLocations[@"txm.static_artifact"] != [NSNull null];
-        NSString *firstProvenBlocker = !selectedKernelExploit ? @"selector.kernel_metadata" :
+        NSString *firstProvenBlocker = !staticInputsPresent ? @"static.artifacts" :
+            (!selectedKernelExploit ? @"selector.kernel_metadata" :
             (pacRequired && !selectedPACBypass ? @"selector.pac_metadata" :
-            (pplRequired && !selectedPPLBypass ? @"selector.ppl_metadata" : @"none"));
+            (pplRequired && !selectedPPLBypass ? @"selector.ppl_metadata" : @"none")));
 
         NSMutableArray<NSDictionary *> *jailbreakDryRunStages = [NSMutableArray new];
         void (^recordDryRun)(NSString *, NSString *, NSString *) = ^(NSString *stage, NSString *status, NSString *evidence) {
             [jailbreakDryRunStages addObject:@{
                 @"stage": stage,
                 @"status": status,
+                @"result": A15ResearchResultForStatus(status),
                 @"evidence": evidence,
             }];
             record([@"jailbreak_dry_run." stringByAppendingString:stage], status, evidence);
@@ -662,10 +773,15 @@
         record(@"titan.physical_write", @"NOT_REACHED", @"physwritebuf-not-published");
         record(@"sptm_txm.runtime_response", @"NOT_REACHED", @"no-protected-component-request-issued");
 
+        uint64_t reportNowNs = A15ResearchMonotonicNanoseconds();
+        uint64_t reportDurationNs = reportNowNs >= sessionStartNs ? reportNowNs - sessionStartNs : 0;
         NSDictionary *report = @{
             @"schema": @"dopamine.a15-ios26.device-diagnostic.v6",
             @"diagnostic_only": @YES,
             @"asserts_live_sptm_txm_response": @NO,
+            @"session_id": sessionID,
+            @"component": component,
+            @"duration_ns": @(reportDurationNs),
             @"target": @{
                 @"device": @"iPhone14,2",
                 @"soc": @"A15",
@@ -690,11 +806,16 @@
         NSString *outputPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/a15-ios26-diagnostic-v6.json"];
         BOOL wroteReport = json != nil && [json writeToFile:outputPath options:NSDataWritingAtomic error:&jsonError];
         [self emitResearchDiagnosticEvent:wroteReport
-            ? @"checkpoint=report.write status=PASS path=Documents/a15-ios26-diagnostic-v6.json"
-            : [NSString stringWithFormat:@"checkpoint=report.write status=FAIL error=%@", jsonError.localizedDescription ?: @"unknown"]];
+            ? @"checkpoint=report.write result=PASS status=PASS path=Documents/a15-ios26-diagnostic-v6.json"
+            : [NSString stringWithFormat:@"checkpoint=report.write result=FAIL status=FAIL error=%@", jsonError.localizedDescription ?: @"unknown"]];
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            [[DOUIManager sharedInstance] completeJailbreak];
+            NSString *title = wroteReport ? DOLocalizedString(@"Research_Diagnostic_Blocked") : DOLocalizedString(@"Log_Error");
+            [[DOUIManager sharedInstance] sendLog:wroteReport
+                ? @"[A15DIAG] checkpoint=diagnostic.final result=BLOCKED status=BLOCKED evidence=jailbreak-not-performed"
+                : @"[A15DIAG] checkpoint=diagnostic.final result=FAIL status=FAIL evidence=report-write-failed"
+                debug:NO];
+            [self.navigationController pushViewController:[[DOLogCrashViewController alloc] initWithTitle:title] animated:YES];
         });
     });
 }

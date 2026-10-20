@@ -2017,3 +2017,25 @@ distinction. This follow-up remains `STATIC PASS` only: no new device probe,
 GPU submission, nonempty MDSID record, MMIO, physical/protected write,
 SPTM/PAPT change, bootstrap or Sileo operation was added.
 
+### 2026-10-20: Experimental A15 jailbreak-path UI diagnostic
+
+Added a target-gated second action to `DOMainViewController`: `Experimental
+jailbreak (A15)`. The existing `A15ACTIVE diagnostic` action remains separate
+and unchanged. The new action displays a warning before starting the existing
+selection and prerequisite dry-run; it does not call `DOJailbreaker`, load an
+exploit, submit a nonempty MDSID record, access MMIO or physical memory,
+modify SPTM/PAPT state, change privileges or install a bootstrap.
+
+The dry-run now normalizes every event to `PASS`, `FAIL`, `BLOCKED` or
+`NOT_TESTED` while retaining the raw status and evidence. It records the first
+proven blocker, session ID, component, monotonic elapsed time and total
+duration, writes `Documents/a15-ios26-diagnostic-v6.json`, and opens
+`DOLogCrashViewController` so the captured log can be reviewed and exported.
+The log title explicitly says that the diagnostic is blocked and the final
+event states `jailbreak-not-performed`; a report write failure is reported as
+`FAIL`.
+
+The UI and source-contract checks pass offline. No Objective-C compilation or
+device execution was performed in this revision, so device behavior and
+functional jailbreak status remain `NOT_TESTED`.
+

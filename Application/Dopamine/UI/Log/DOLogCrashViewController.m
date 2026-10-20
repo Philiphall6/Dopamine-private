@@ -34,7 +34,7 @@
     [super viewDidLoad];
     [DOPSListController setupViewControllerStyle:self];
 
-    UIView *header = [DOPSListItemsController makeHeader:DOLocalizedString(@"Log_Error") withTarget:self];
+    UIView *header = [DOPSListItemsController makeHeader:self.title.length ? self.title : DOLocalizedString(@"Log_Error") withTarget:self];
     header.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:header];
 

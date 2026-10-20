@@ -133,4 +133,9 @@
 "Research_Stage_IORegistry" = "4. Chaîne IODeviceMemory : prouvée";
 "Research_Stage_IORVBAR" = "5. Mapping IORVBAR existant : validé ; exécution Titan bloquée";
 "Research_Button_Run" = "Lancer la sonde Titan";
+"Research_Active_Button" = "Diagnostic A15ACTIVE";
+"Research_Experimental_Button" = "Jailbreak expérimental (A15)";
+"Research_Experimental_Title" = "Diagnostic expérimental A15";
+"Research_Experimental_Warning" = "Cette configuration ne fournit pas un jailbreak fonctionnel. Cette action vérifie uniquement la compatibilité et s'arrête au premier prérequis manquant. Aucun privilège, aucune mémoire protégée et aucun bootstrap ne seront modifiés.";
+"Research_Diagnostic_Blocked" = "Diagnostic bloqué ; jailbreak non effectué";
 
