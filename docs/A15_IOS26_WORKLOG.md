@@ -1871,3 +1871,18 @@ This is a progress-control change only. It does not build an IPA, alter Titan's
 runtime probe, send a record to the phone, or enable MMIO, physical/protected
 writes, root replacement, bootstrap or Sileo.
 
+### 2026-10-20: MDSID evidence correlation remains an explicit no-go
+
+Added `triage_agx_mdsid_readiness.py`, which combines an exported bounded
+phone journal with the exact-image MDSID TTBR0 audit. It checks the static
+route, the read-only command-buffer and firmware callback identities, and the
+accepted notification-bound empty-record cleanup as distinct facts.
+
+The tool has no device-facing behavior and always reports
+`device_submission_authorized: false`. With all evidence present it returns
+`STATIC_AND_EMPTY_ROUTE_EVIDENCED_NO_GO`; otherwise it returns
+`INCOMPLETE_EVIDENCE_NO_GO`. In neither state can a nonempty MDSID record be
+authorized, built or run. The remaining blockers are callback execution and
+effects, complete backend release timing, host wake/root acceptance and
+power-lifecycle recovery.
+

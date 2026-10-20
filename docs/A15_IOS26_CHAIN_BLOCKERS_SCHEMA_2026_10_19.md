@@ -35,7 +35,8 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
 [STATIC PASS] Command 3 -> current-context registered root -> TTBR0_EL1
    |
 [BLOCKER 1] Nonempty selector-25/MDSID runtime transport
-   |    Static route is exact, but runtime callback identity, complete effects and final release are unobserved
+   |    Static route, read-only callback identity and empty-record cleanup are evidenced;
+   |    nonempty effects and final release remain unobserved
    |
 [BLOCKER 2] Deterministic app-side power transition
    |    Must request normal power and keep queue/context alive
@@ -76,8 +77,11 @@ entry and later exercise a low virtual address through the cloned root.
 
 This is a coherent static physical-write candidate, not a working jailbreak.
 Private run `39392906389` completed the ordinary notification prerequisite and
-one empty selector-25 record on the target. The MDSID route remains static-only:
+one empty selector-25 record on the target. The MDSID route remains blocked
+from runtime nonempty use:
 the exact-image audit now emits `STATIC_ROUTE_ONLY_NO_GO` because runtime
-nonempty submission, callback identity, complete effects and final release are
-not yet observed. No MDSID IPA is authorized; root replacement and protected
-writes remain disabled.
+nonempty submission, complete effects and final release are not yet observed.
+The follow-on correlation gate records the read-only live callback identities
+and empty-record cleanup, but still emits
+`STATIC_AND_EMPTY_ROUTE_EVIDENCED_NO_GO` with device submission denied. No
+MDSID IPA is authorized; root replacement and protected writes remain disabled.

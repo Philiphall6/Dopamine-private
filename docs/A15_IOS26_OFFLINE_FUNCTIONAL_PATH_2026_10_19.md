@@ -80,7 +80,7 @@ context survival still require one bounded runtime observation.
 | Selector-25 ABI | RUNTIME PASS | Wrapper accepted the `0x40` contract; batch reached its missing-notification gate |
 | Notification create/bind | RUNTIME PASS | One selector-14/24 run established stable `queue+0x428/+0x430` relations |
 | Bound empty selector-25 call | RUNTIME PASS | One accepted record and immediate cleanup observation |
-| MDSID-to-GXF-TTBR0 binding | STATIC PASS | Runtime packet transport, effective callback identity, complete effects and final release |
+| MDSID-to-GXF-TTBR0 binding | STATIC PASS / RUNTIME IDENTITY READS | Runtime packet transport, callback execution/effects and final release |
 | Active-root discovery through BEE7 | STATIC PASS / RUNTIME PENDING | Confirm both returned roots on-device without mutation |
 | RTBuddy class-`0xb` producer | STATIC PASS | Deterministic app-visible transition and lifecycle |
 | RTBuddy-to-firmware lifecycle | STATIC PASS | App-visible power assertion and queue/context survival |
@@ -113,8 +113,9 @@ context survival still require one bounded runtime observation.
    the command queue had no notification binding at `+0x428`.
 6. DONE: the notification-bound empty selector-25 probe ran once; selectors
    14/24/25 completed with one accepted empty record and cleanup.
-7. NEXT: retain the offline MDSID no-go until effective callback identity,
-   complete effects and final release have independent evidence.
+7. NEXT: retain the MDSID no-go after correlating static binding, read-only
+   callback identities and empty-record cleanup; callback execution/effects and
+   final release still require independent evidence.
 8. DEFERRED: define one normal app-side power-assertion observation with exact
    queue, buffer, context and registered-root stability checks.
 9. DEFERRED: define cloned-root construction from the live root without inventing

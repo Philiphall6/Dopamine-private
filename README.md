@@ -74,6 +74,13 @@ nonempty-packet effects unobserved. Its machine-readable gate is therefore
 separate source revision and a fresh, explicitly bounded review are required
 before any further device experiment.
 
+The offline correlation gate now also joins that exact-image result with the
+read-only live callback identities and the accepted empty-record journal. Even
+when all three inputs are present, it emits
+`STATIC_AND_EMPTY_ROUTE_EVIDENCED_NO_GO` and
+`device_submission_authorized: false`; it is deliberately incapable of
+upgrading evidence into permission for a nonempty record.
+
 The apparent final `titan.run FAIL return=-1` is the probe runner's deliberate
 stop after a completed bounded stage; the preceding `titan.zero-packet PASS`
 and `titan.own-queue PASS` lines are the relevant operation results.
@@ -166,6 +173,8 @@ Deployment order:
 - Current G14P ABI: [`docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md`](docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md)
 - Notification prerequisite: [`docs/A15_IOS26_AGX_NOTIFICATION_BINDING_V1_2026_10_20.md`](docs/A15_IOS26_AGX_NOTIFICATION_BINDING_V1_2026_10_20.md)
 - Nonempty MDSID runtime gate: [`tools/a15_ios26/audit_agx_submit_boundary.py`](tools/a15_ios26/audit_agx_submit_boundary.py)
+- MDSID evidence correlation no-go: [`docs/A15_IOS26_MDSID_READINESS_NO_GO_2026_10_20.md`](docs/A15_IOS26_MDSID_READINESS_NO_GO_2026_10_20.md)
+- Correlation tool: [`tools/a15_ios26/triage_agx_mdsid_readiness.py`](tools/a15_ios26/triage_agx_mdsid_readiness.py)
 - V4 log triage: [`tools/a15_ios26/triage_agx_notification_bound_probe.py`](tools/a15_ios26/triage_agx_notification_bound_probe.py)
 - Power lifecycle audit: [`tools/a15_ios26/audit_agx_firmware_power_lifecycle.py`](tools/a15_ios26/audit_agx_firmware_power_lifecycle.py)
 
