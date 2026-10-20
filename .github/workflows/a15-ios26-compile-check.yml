@@ -20,12 +20,12 @@ jobs:
           xcode-version: latest-stable
 
       - name: Checkout with submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Prepare Python for offline audits
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -36,9 +36,28 @@ jobs:
         uses: dhinakg/procursus-action@main
         with:
           packages: ldid
+          # The action's internal actions/cache@v3 path attempts to archive
+          # Procursus lock files with /opt/procursus/bin/gtar. The compile
+          # check does not need a persistent Procursus cache.
+          cache: false
 
       - name: Install libarchive headers
         run: brew install libarchive
+
+      - name: Install iOS 16 SDK for the compile check
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sdk_archive="$RUNNER_TEMP/iPhoneOS16.5.sdk.tar.xz"
+          sdk_root="$RUNNER_TEMP/ios16-sdk"
+          curl -fsSL \
+            https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz \
+            -o "$sdk_archive"
+          mkdir -p "$sdk_root"
+          tar -xJf "$sdk_archive" -C "$sdk_root"
+          test -d "$sdk_root/iPhoneOS16.5.sdk"
+          test -f "$sdk_root/iPhoneOS16.5.sdk/SDKSettings.plist"
+          echo "IOS16_SDK_PATH=$sdk_root/iPhoneOS16.5.sdk" >> "$GITHUB_ENV"
 
       - name: Prepare Titan's generated headers and libraries
         shell: bash
@@ -59,7 +78,8 @@ jobs:
             -project Application/Dopamine.xcodeproj \
             -target Titan \
             -configuration Debug \
-            -sdk iphoneos \
+            -sdk "$IOS16_SDK_PATH" \
+            IPHONEOS_DEPLOYMENT_TARGET=16.1 \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -77,7 +97,7 @@ jobs:
 
       - name: Upload compile logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: a15-ios26-compile-check-${{ github.sha }}
           if-no-files-found: warn

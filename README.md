@@ -154,6 +154,15 @@ offline-only. It adds a manual macOS compile-check workflow and an offline
 JSONL audit while preserving V2's resource/error contract; it does not
 promote a new IPA or authorize a device run.
 
+The V5 compile validation was inspected from private Actions run
+[`39437143268`](https://github.com/Philiphall6/Dopamine-private/actions/runs/39437143268).
+That run proved `Titan.framework` compilation, inclusion of the modified
+`Application/Dopamine/Exploits/Titan/exploit/titan.m` Objective-C source, and
+315 offline Python tests. Its compile used the Xcode 26.5 SDK while targeting
+iOS 16.1, so the workflow now downloads and selects the iPhoneOS 16.5 SDK
+explicitly for the next verification run. This remains a compile-only check;
+it does not produce an IPA, install anything, or validate a jailbreak.
+
 Deployment order:
 
 1. Trigger the private GitHub Actions workflow manually for one exact commit;
@@ -186,6 +195,7 @@ Deployment order:
 - AGX lifecycle V2: [`docs/A15_IOS26_AGX_LIFECYCLE_V2_2026_10_20.md`](docs/A15_IOS26_AGX_LIFECYCLE_V2_2026_10_20.md)
 - AGX lifecycle V2 offline tests: [`tools/a15_ios26/test_agx_lifecycle_v2.py`](tools/a15_ios26/test_agx_lifecycle_v2.py)
 - AGX lifecycle V3: [`docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md`](docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md)
+- Build validation V5: [`docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md`](docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md)
 - AGX lifecycle log audit: [`tools/a15_ios26/audit_agx_lifecycle_log.py`](tools/a15_ios26/audit_agx_lifecycle_log.py)
 - Manual macOS compile check: [`.github/workflows/a15-ios26-compile-check.yml`](.github/workflows/a15-ios26-compile-check.yml)
 

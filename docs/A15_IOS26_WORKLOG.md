@@ -1965,3 +1965,34 @@ SPTM/PAPT operation, bootstrap or Sileo action was added. Full details and the
 controlled-device preparation checklist are in
 `docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md`.
 
+### 2026-10-20: V5 build evidence and iOS 16 SDK correction
+
+Private Actions run `39437143268` completed the compile-check job successfully
+at commit `ebbb78881629f77ac6afd684f4bd0f4520cff0c0`. Its logs show the
+modified `Application/Dopamine/Exploits/Titan/exploit/titan.m` compiled as
+Objective-C for `arm64` with deployment target `iOS 16.1`, the generated
+`Titan.framework` was linked and touched, and `xcodebuild` ended with
+`** BUILD SUCCEEDED **`. The same run executed `315` Python tests, `compileall`,
+the research integration check and `git diff --check` successfully.
+
+The run used the selected Xcode's `iPhoneOS26.5.sdk` as its sysroot even
+though Titan targeted iOS 16.1. The compile-check workflow now downloads the
+existing iPhoneOS 16.5 SDK archive, passes its path to `xcodebuild -sdk`, and
+sets `IPHONEOS_DEPLOYMENT_TARGET=16.1` explicitly. This exact-SDK correction is
+`NOT_TESTED` until a new Actions run executes it; the prior run remains a
+valid compile proof for the newer SDK only.
+
+The workflow also moved checkout, Python setup and artifact upload to their
+current Node 24 action majors. Procursus caching is disabled for this
+compile-only job. That removes the internal `actions/cache@v3` path and its
+post-job `/opt/procursus/bin/gtar` lock-file warning without changing the
+installed `ldid` dependency or the project build. The old run's two Xcode
+warnings remain informational: the Titan target has no umbrella header while
+`DEFINES_MODULE` is enabled, and an existing run-script phase has no declared
+outputs. No warning was emitted by `titan.m` itself.
+
+No GPU operation, nonempty MDSID record, physical/protected write, SPTM/PAPT
+change, bootstrap, Sileo installation or device run was added. Full evidence,
+limitations and the next verification criteria are in
+`docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md`.
+
