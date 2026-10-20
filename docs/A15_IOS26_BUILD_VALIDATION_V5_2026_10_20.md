@@ -112,6 +112,28 @@ The existing `titan.m` V1-V3 diagnostic contract remains intact:
   proof of firmware-context persistence;
 - power assertion confirmation and context retention remain `NOT_TESTED`.
 
+The supplied iPhone log adds one concrete precondition result. The first
+blocked checkpoint was `titan.zero-packet.buffer-preflight`, which observed a
+non-zero byte at offset `0x100` in the returned 16 KiB user mapping. The
+selector-25 call was therefore not reached in that run. This does not prove a
+parser or MDSID failure; it proves that the prior probe had not established a
+deterministic buffer baseline before observing it.
+
+The follow-up change in `titan.m` now zeroes the returned shared user mapping
+with `memset`, verifies the complete 0x4000-byte range, and records
+`buffer-initialize` before the existing temporary 0x20-byte alias mutation.
+The mutation remains restored by the existing cleanup path. This is a
+userland initialization and observation change only; it does not add a GPU
+submission, a nonempty MDSID record, an MMIO access, or a physical/protected
+memory write.
+
+Client closure and child-resource destruction are now separate lifecycle
+observations. `client-closed` records the `IOServiceClose` result, while
+`child-resources-teardown` remains explicitly `NOT_TESTED` because the code
+does not independently observe destruction of the buffer, queue, or
+notification objects. A successful client close must not be read as proof of
+that child teardown.
+
 The compile result is independent from the runtime AGX result. A successful
 Objective-C compile proves that the source can be compiled and linked; it does
 not prove GPU parser behavior, firmware persistence, MDSID effects, SPTM/PAPT
@@ -122,7 +144,7 @@ access or privilege changes.
 The previous local verification for this branch reported:
 
 ```text
-python -m unittest discover -s tools/a15_ios26 -p "test_*.py"  -> 315 tests, OK
+python -m unittest discover -s tools/a15_ios26 -p "test_*.py"  -> 318 tests, OK
 python -m compileall -q tools/a15_ios26                       -> PASS
 python tools/a15_ios26/check_research_integration.py          -> PASS
 git diff --check                                               -> PASS
@@ -133,6 +155,11 @@ The V5 workflow keeps the same suite and runs it after the compile step with
 The corrected SDK path and the action-cache changes require a fresh Actions
 execution; no local Windows environment can reproduce an Xcode compile.
 
+The three new local source-contract tests cover the explicit shared-buffer
+baseline, restoration of temporary bytes and the distinction between client
+closure and independently unverified child teardown. Their result is
+static/offline evidence, not an on-device lifetime proof.
+
 ## 7. Remaining blockers
 
 The following remain `BLOCKED` or `NOT_TESTED`:
@@ -141,12 +168,15 @@ The following remain `BLOCKED` or `NOT_TESTED`:
 - power assertion request and confirmation: `NOT_TESTED`;
 - firmware context retention and recovery: `NOT_TESTED`;
 - nonempty MDSID parser effects and complete backend release: `NOT_TESTED`;
+- independent destruction of the shared buffer, queue and notification child
+  objects after client close: `NOT_TESTED`;
 - physical or protected memory writes and SPTM/PAPT policy changes: `BLOCKED`;
 - root replacement, trust-cache changes, bootstrap and Sileo: `BLOCKED`;
 - IPA generation and installation: `NOT_TESTED` in this compile-only workflow.
 
 No new GPU submission, nonempty MDSID record, physical write, protected write,
-SPTM/PAPT modification, bootstrap operation or device run was added in V5.
+SPTM/PAPT modification, bootstrap operation or device run was added by this
+follow-up.
 
 ## 8. Next step
 

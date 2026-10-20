@@ -19,6 +19,7 @@ class CleanupModel:
     unlock_calls: int = 0
     close_calls: int = 0
     release_calls: int = 0
+    child_teardown: str = "NOT_TESTED"
 
     def cleanup(self, *, unlock_ok=True, close_ok=True, release_ok=True):
         if self.cleanup_done:
@@ -92,6 +93,37 @@ class TestAGXLifecycleV2Source(unittest.TestCase):
         self.assertIn("@\"IOServiceClose\"", SOURCE)
         self.assertIn("@\"IOObjectRelease\"", SOURCE)
 
+    def test_shared_buffer_baseline_is_explicit_and_verified(self):
+        self.assertIn(
+            "memset((void *)(uintptr_t)output.address, 0, output.size);",
+            SOURCE,
+        )
+        self.assertIn("titan.shared-alias.buffer-initialize", SOURCE)
+        self.assertIn("bufferInitialized", SOURCE)
+        self.assertLess(
+            SOURCE.index("titan.shared-alias.buffer-initialize"),
+            SOURCE.index("titan.shared-alias.alias-read"),
+        )
+        self.assertIn("all-zero=%s first-nonzero=0x%zx", SOURCE)
+
+    def test_temporary_shared_bytes_are_restored(self):
+        self.assertIn("if (resources->userChanged)", SOURCE)
+        self.assertIn(
+            "memcpy(resources->userBytes, resources->originalBytes, sizeof(observed));",
+            SOURCE,
+        )
+        self.assertIn("memcmp(observed, resources->originalBytes", SOURCE)
+
+    def test_client_close_is_distinct_from_child_teardown(self):
+        self.assertIn("child_resources_teardown", SOURCE)
+        self.assertIn('@"client-closed"', SOURCE)
+        self.assertIn('@"child-resources-teardown"', SOURCE)
+        self.assertIn("child AGX teardown remains NOT_TESTED", SOURCE)
+        self.assertIn(
+            "no independent destruction observation exists for buffer, queue or notification objects",
+            SOURCE,
+        )
+
 
 class TestAGXLifecycleV2CleanupModel(unittest.TestCase):
     def test_normal_cleanup_releases_each_owned_resource_once(self):
@@ -100,6 +132,7 @@ class TestAGXLifecycleV2CleanupModel(unittest.TestCase):
         self.assertTrue(state.cleanup())
         self.assertEqual((state.unlock_calls, state.close_calls, state.release_calls), (1, 1, 1))
         self.assertFalse(state.page_locked or state.connection_open or state.service_held)
+        self.assertEqual(state.child_teardown, "NOT_TESTED")
         self.assertTrue(state.cleanup())
         self.assertEqual((state.unlock_calls, state.close_calls, state.release_calls), (1, 1, 1))
 

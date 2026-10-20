@@ -1996,3 +1996,24 @@ change, bootstrap, Sileo installation or device run was added. Full evidence,
 limitations and the next verification criteria are in
 `docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md`.
 
+### 2026-10-20: Shared-buffer invariant and child teardown proof (offline follow-up)
+
+Review of the supplied A15/iOS 26.0.1 journal identified the first blocked
+checkpoint as `titan.zero-packet.buffer-preflight`: the returned 16 KiB user
+mapping was not zero at offset `0x100`, so selector 25 was not called. The
+result is a buffer-invariant failure in the diagnostic precondition, not
+evidence about nonempty MDSID processing.
+
+The Titan probe now explicitly zeroes the owned shared user mapping, verifies
+the complete range, and records `buffer-initialize` before the existing
+temporary 0x20-byte alias mutation. The existing restoration path remains in
+place. The lifecycle contract also records `client-closed` separately from
+`child-resources-teardown=NOT_TESTED`; `IOServiceClose` and
+`IOObjectRelease` do not independently prove destruction of the buffer, queue
+or notification objects.
+
+Added offline source-contract coverage for both invariants and the cleanup
+distinction. This follow-up remains `STATIC PASS` only: no new device probe,
+GPU submission, nonempty MDSID record, MMIO, physical/protected write,
+SPTM/PAPT change, bootstrap or Sileo operation was added.
+
