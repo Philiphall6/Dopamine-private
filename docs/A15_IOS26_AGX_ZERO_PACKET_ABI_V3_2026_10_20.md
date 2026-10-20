@@ -39,3 +39,14 @@ matches the live queue-input contract already observed at `device+0x278`.
 
 This is still an empty-record transport observation, not a jailbreak or a
 physical-write primitive.
+
+## Verified build
+
+Commit `0ec47e4e2a1dd27ad57f4ee1e226124a3c27206f` was built by private GitHub
+Actions run [39384824664](https://github.com/Philiphall6/Dopamine-private/actions/runs/39384824664).
+The downloaded IPA has SHA-256
+`F4F98891E9BC2998BBB94207BC53F5528EF012FA92D898554F520DC3E891C8AB`.
+Its compiled Titan function reads `device+0x268`, compares against `0x40`,
+sets the structure size to `0x40`, selects method 25 and contains exactly one
+branch to the `_IOConnectCallMethod` stub. It is ready for one bounded target
+run only.

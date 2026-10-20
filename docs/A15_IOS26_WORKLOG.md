@@ -1692,9 +1692,9 @@ hash, RTBuddy control flow, all relevant authenticated vtable slots and the
 concrete firmware implementations. Its four focused tests pass. The report is
 `../../outputs/iphone-system/agx-firmware-power-lifecycle-2026-10-20.json`.
 No device probe, packet submission, MMIO, physical write or protected-memory
-write was performed. The next device evidence remains one corrected selector-25
-`0x30` record with cleanup observation; a power-cycle probe is not combined
-with it.
+write was performed. The next device evidence is the separately verified ABI
+v3 selector-25 `0x40` record with cleanup observation; a power-cycle probe is
+not combined with it.
 
 ### 2026-10-20: ABI v2 stopped safely and exposed the G14P 0x40 override
 
@@ -1715,4 +1715,20 @@ live field, so `0x40` is now supported by both runtime and static evidence.
 ABI v3 changes only the bounded record size to `0x40`, updates the revision
 markers and retains the one-call, no-retry, no-MMIO, no-physical-write and
 no-protected-write gates. V2 is retired and must not be run again.
+
+### 2026-10-20: ABI v3 private artifact built and verified
+
+Private GitHub Actions run `39384824664` built commit
+`0ec47e4e2a1dd27ad57f4ee1e226124a3c27206f` successfully. The downloaded IPA
+has SHA-256
+`F4F98891E9BC2998BBB94207BC53F5528EF012FA92D898554F520DC3E891C8AB` and
+embeds revision
+`self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1`, safety mode
+`no-gfx-mmio` and marker `titan.zero-packet.record-contract`.
+
+The compiled `_titan_probe_zero_packet_once` function reads offset `0x268`,
+compares the live value against `0x40`, builds an exact `0x40`-byte structure,
+selects external method `0x19` and contains exactly one branch to the
+`_IOConnectCallMethod` stub. The artifact is promoted only to one bounded
+target run. No device run has yet been made with ABI v3.
 

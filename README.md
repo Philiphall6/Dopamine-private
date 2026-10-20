@@ -24,7 +24,7 @@ flowchart TD
     A[ClearSword kernel read/write<br/>RUNTIME PASS]
     B[Reversible app-owned page alias write<br/>RUNTIME PASS]
     C[Owned AGX client, shared buffer and queue<br/>RUNTIME PASS]
-    D[Selector 25 G14P 0x40 record ABI<br/>STATIC PASS / SOURCE READY]
+    D[Selector 25 G14P 0x40 record ABI<br/>STATIC PASS / VERIFIED BUILD READY]
     E[MDSID packet and low-VA GXF TTBR0 route<br/>STATIC PASS]
     F[BEE7 active-root discovery<br/>STATIC PASS]
     G[16 KiB cloned-root format<br/>STATIC PASS]
@@ -55,11 +55,24 @@ flowchart TD
 
 ### Current deployment gate
 
-The only justified next device build is the bounded
+The only justified next device run is the bounded
 `self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1` probe. It
 submits at most one selector-25 record of `0x40` bytes, records pre/post state,
 and stops. It does not install a replacement root, force a power transition,
 perform GPU MMIO, write physical memory, or modify protected memory.
+
+Current verified private build, ready for one bounded target run:
+
+| Field | Value |
+| --- | --- |
+| Source commit | `0ec47e4e2a1dd27ad57f4ee1e226124a3c27206f` |
+| GitHub Actions run | [`39384824664`](https://github.com/Philiphall6/Dopamine-private/actions/runs/39384824664) (`success`) |
+| IPA SHA-256 | `F4F98891E9BC2998BBB94207BC53F5528EF012FA92D898554F520DC3E891C8AB` |
+| Embedded revision | `self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1` |
+| Safety mode | `no-gfx-mmio` |
+| Probe marker | `titan.zero-packet.record-contract` |
+| Compiled ABI evidence | `device+0x268`, compare/record size `0x40`, selector `0x19` |
+| Call boundary | Exactly one `_IOConnectCallMethod` call in `_titan_probe_zero_packet_once` |
 
 Last device-tested private build (retired):
 
@@ -104,7 +117,8 @@ Deployment order:
 - Functional ledger: [`docs/A15_IOS26_OFFLINE_FUNCTIONAL_PATH_2026_10_19.md`](docs/A15_IOS26_OFFLINE_FUNCTIONAL_PATH_2026_10_19.md)
 - Blocker schema: [`docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md`](docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md)
 - Detailed worklog: [`docs/A15_IOS26_WORKLOG.md`](docs/A15_IOS26_WORKLOG.md)
-- Verified private build: [`docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md)
+- Current verified private build: [`docs/A15_IOS26_PRIVATE_BUILD_V3_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_V3_2026_10_20.md)
+- Retired v2 private build: [`docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md)
 - Current G14P ABI: [`docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md`](docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md)
 - Power lifecycle audit: [`tools/a15_ios26/audit_agx_firmware_power_lifecycle.py`](tools/a15_ios26/audit_agx_firmware_power_lifecycle.py)
 
