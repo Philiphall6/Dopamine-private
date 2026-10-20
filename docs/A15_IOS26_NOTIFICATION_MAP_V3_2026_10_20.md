@@ -26,3 +26,20 @@ the two values:
 The revision retains one selector-14 creation, one selector-24 bind and at most
 one selector-25 all-zero record. It does not use MDSID or advance to power,
 root, physical-memory, SPTM, bootstrap or Sileo work.
+
+## Bounded device result
+
+The map-v3 IPA was built from `a91336d4f2a3e3ae9dd52d2bc43b72e852f39c87` by
+private Actions run `39392906389`. Its SHA-256 is
+`9DAFDD799ED35053DEA7281850AD3EAEE64FE237CC3D5026E90686A0D2174C26`.
+
+One target run completed selector 14, selector 24 and selector 25 exactly once.
+The bind populated `queue+0x428` and retained the exact notification object at
+`queue+0x430`. Selector 25 accepted the owned all-zero `0x40` record with
+`kr=0x0`. The pool digest, user buffer and tracked command, firmware,
+notification and buffer identities stayed stable. `dispatch` and `command-index`
+advanced from `0` to `1`, which is the expected consumption signal. The owned
+connection then closed cleanly without a restart.
+
+This proves only the linked empty-record path and its immediate cleanup. It does
+not prove a nonempty parser path or authorize MDSID submission.

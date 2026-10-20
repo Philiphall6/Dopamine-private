@@ -25,22 +25,22 @@ flowchart TD
     B[Reversible app-owned page alias write<br/>RUNTIME PASS]
     C[Owned AGX client, shared buffer and queue<br/>RUNTIME PASS]
     D[Selector 25 G14P 0x40 wrapper contract<br/>RUNTIME PASS]
-    E[Notification queue selector 14, vtable and map ABI<br/>RUNTIME PASS; selector 24 pending]
+    E[Notification queue selectors 14 and 24, vtable and map ABI<br/>RUNTIME PASS]
     P[MDSID packet and low-VA GXF TTBR0 route<br/>STATIC PASS]
     F[BEE7 active-root discovery<br/>STATIC PASS]
     G[16 KiB cloned-root format<br/>STATIC PASS]
     H[RTBuddy and G14P firmware power lifecycle<br/>STATIC PASS]
     I[GXF command 3 reloads current-context TTBR0<br/>STATIC PASS]
-    J[Bound selector-25 empty record accepted<br/>RUNTIME BLOCKER]
+    J[Bound selector-25 empty record accepted and cleaned up<br/>RUNTIME PASS]
     K[Normal power assertion keeps queue/context alive<br/>RUNTIME BLOCKER]
     L[Owned cloned root accepted and restored<br/>BLOCKED]
     M[Stable physical write with rollback<br/>BLOCKED]
     N[SPTM/PAPT policy bypass<br/>BLOCKED]
     O[Trust cache, bootstrap and Sileo<br/>BLOCKED]
 
-    A --> B --> C --> D --> E --> J
+    A --> B --> C --> D --> E --> J --> P
     C --> H --> I --> K
-    D --> P --> F --> G
+    P --> F --> G
     J --> K --> L --> M --> N --> O
     G --> L
 
@@ -52,31 +52,41 @@ flowchart TD
     class D runtime
     class E runtime
     class P,F,G,H,I static
-    class J,K pending
+    class K pending
     class L,M,N,O blocked
 ```
 
 ### Current deployment gate
 
-ABI v3 ran once without a restart. The `0x40` record contract passed, but the
-single selector-25 call returned `0xe00002bc`; all queue and firmware snapshots
-remained unchanged. Exact-image control flow proves that this value is returned
-before backend allocation when `queue+0x428` is null. The missing prerequisite
-is therefore the normal IOGPU notification queue, not another record-size guess.
+The notification-map v3 build completed one bounded run without a restart.
+Selector 14 created the owned notification queue, selector 24 bound it, and
+`queue+0x428` was populated. The one selector-25 call then accepted the empty
+`0x40` record with `kr=0x0`. The pool digest, buffer contents and tracked
+identities were stable before and after the call; only the expected dispatch and
+command-index counters advanced from `0` to `1`. Connection cleanup passed.
 
-The notification-vtable v2 run reached selector 14, created its owned
-notification queue and validated its exact vtable. It then stopped before
-selector 24 or selector 25 because the driver-owned `IOMemoryMap` length was
-`0x2454`, not the provisional payload-size expectation `0x2000`. The latter is
-still the `256 x 32` payload; `0x2454` is the observed map contract.
+This closes the empty-record gate, not the jailbreak chain. No nonempty MDSID
+record has been submitted. The next activity is an offline review of the exact
+MDSID parser and cleanup boundaries. The exact-image audit establishes the
+static route, but explicitly leaves final deallocation timing and complete
+nonempty-packet effects unobserved. A separate source revision and a fresh,
+explicitly bounded review are required before any further device experiment.
 
-The only justified next device run is
-`self-page-write-v1+agx-notification-map-v3+rtkit-mmio-disabled-v1`. It only
-corrects that map-length guard, then creates one notification queue with
-selector 14, binds it once with selector 24, and makes at most one selector-25
-call with the existing all-zero record. It does not submit MDSID, install a
-replacement root, force a power transition, perform GPU MMIO, write physical
-memory, or modify protected memory.
+The apparent final `titan.run FAIL return=-1` is the probe runner's deliberate
+stop after a completed bounded stage; the preceding `titan.zero-packet PASS`
+and `titan.own-queue PASS` lines are the relevant operation results.
+
+Last device-tested private build (notification-map v3, empty-record gate passed):
+
+| Field | Value |
+| --- | --- |
+| Source commit | `a91336d4f2a3e3ae9dd52d2bc43b72e852f39c87` |
+| GitHub Actions run | [`39392906389`](https://github.com/Philiphall6/Dopamine-private/actions/runs/39392906389) (`success`) |
+| IPA SHA-256 | `9DAFDD799ED35053DEA7281850AD3EAEE64FE237CC3D5026E90686A0D2174C26` |
+| Embedded revision | `self-page-write-v1+agx-notification-map-v3+rtkit-mmio-disabled-v1` |
+| Safety mode | `no-gfx-mmio` |
+| Device result | Selectors 14, 24 and 25 each completed once; selector 25 returned `0x0`; empty-record cleanup observed |
+| Excluded work | MDSID/nonempty records, power transitions, GPU MMIO, physical/protected writes, root replacement, bootstrap and Sileo |
 
 Last device-tested private build (notification-vtable v2, retired at the map guard):
 
@@ -122,11 +132,11 @@ The exact selector-25 batch reads `queue+0x428` before either the backend or
 parser. Selector 14 creates a 256-by-32-byte `IOGPUNotificationQueue` and
 registers it under `client-table+0x90`; selector 24 stores the derived object at
 `queue+0x428` and the queue object through `queue+0x430`. The exact selector-14
-factory installs notification vtable `0xfffffff007e479a8`; v2 validates this
-identity before the one-call selector-25 boundary.
+factory installs notification vtable `0xfffffff007e479a8`. All of these
+relationships are now observed on the target in the bounded empty-record run.
 
 The build is not a jailbreak release. Sileo and bootstrap deployment remain
-blocked behind selector-25 acceptance, power-lifecycle survival, reversible
+blocked behind the nonempty MDSID review, power-lifecycle survival, reversible
 root replacement, a stable physical-write primitive and the SPTM/PAPT policy
 boundary.
 
@@ -136,9 +146,10 @@ Deployment order:
    documentation and source pushes do not build automatically.
 2. Build one IPA from that commit and verify its embedded revision.
 3. Install and run it once on the exact target; do not retry automatically.
-4. Accept promotion only if the call contract and cleanup observations pass.
-5. Then build a separate power-lifecycle observation that checks queue, buffer,
-   context and registered-root stability.
+4. Preserve the accepted empty-record evidence and complete the offline
+   nonempty MDSID parser/cleanup review.
+5. Review any future MDSID probe as a separate source change and artifact;
+   no automatic device run or retry is permitted.
 6. Root replacement, physical writes and SPTM work stay disabled until their
    restoration contracts are independently complete.
 
@@ -147,8 +158,8 @@ Deployment order:
 - Functional ledger: [`docs/A15_IOS26_OFFLINE_FUNCTIONAL_PATH_2026_10_19.md`](docs/A15_IOS26_OFFLINE_FUNCTIONAL_PATH_2026_10_19.md)
 - Blocker schema: [`docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md`](docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md)
 - Detailed worklog: [`docs/A15_IOS26_WORKLOG.md`](docs/A15_IOS26_WORKLOG.md)
-- Current private build: [`docs/A15_IOS26_PRIVATE_BUILD_V4_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_V4_2026_10_20.md)
-- Latest device-tested private build: [`docs/A15_IOS26_PRIVATE_BUILD_V3_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_V3_2026_10_20.md)
+- Accepted empty-record run: [`docs/A15_IOS26_EMPTY_RECORD_ACCEPTED_V3_2026_10_20.md`](docs/A15_IOS26_EMPTY_RECORD_ACCEPTED_V3_2026_10_20.md)
+- Current private build contract: [`docs/A15_IOS26_NOTIFICATION_MAP_V3_2026_10_20.md`](docs/A15_IOS26_NOTIFICATION_MAP_V3_2026_10_20.md)
 - Retired v2 private build: [`docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md)
 - Current G14P ABI: [`docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md`](docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md)
 - Notification prerequisite: [`docs/A15_IOS26_AGX_NOTIFICATION_BINDING_V1_2026_10_20.md`](docs/A15_IOS26_AGX_NOTIFICATION_BINDING_V1_2026_10_20.md)

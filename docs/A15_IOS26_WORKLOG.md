@@ -1831,3 +1831,24 @@ The next artifact retains one selector-14 create, one selector-24 bind and at
 most one all-zero selector-25 call. MDSID, GPU MMIO, physical/protected writes,
 power transitions, root replacement, bootstrap and Sileo remain disabled.
 
+### 2026-10-20: notification-map v3 accepted the linked empty record
+
+Private Actions run `39392906389` built source commit
+`a91336d4f2a3e3ae9dd52d2bc43b72e852f39c87`. The verified IPA SHA-256 is
+`9DAFDD799ED35053DEA7281850AD3EAEE64FE237CC3D5026E90686A0D2174C26` and its
+revision is `self-page-write-v1+agx-notification-map-v3+rtkit-mmio-disabled-v1`.
+
+The single target run on iPhone14,2/23A355 completed the normal notification
+prerequisite: selector 14 created notification ID `1`, selector 24 bound it to
+queue ID `1`, and `queue+0x428` became non-null while `queue+0x430` retained the
+owned notification object. The one all-zero `0x40` selector-25 record returned
+`kr=0x0`. The pool digest and the user buffer were unchanged; backend, status,
+flags, count and precheck remained zero; dispatch and command index advanced
+from zero to one. The target did not restart and connection cleanup passed.
+
+The terminal `titan.run FAIL return=-1` is a deliberate framework-level stop
+after the bounded stage, not a failure of selectors 14, 24 or 25. No MDSID or
+other nonempty record was sent. The next work item is offline-only analysis of
+the nonempty MDSID route and its cleanup. A fresh artifact and an explicit
+review are required before any future device action.
+
