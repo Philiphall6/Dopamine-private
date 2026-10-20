@@ -44,6 +44,12 @@ QUEUE_PACKET_BASE_TABLE = 0xfffffff007e46b28
 QUEUE_PACKET_BASE_SLOT = QUEUE_PACKET_BASE_TABLE + 0x128
 QUEUE_PACKET_BASE_ENCODING = 0x80119dcc02f47e9c
 QUEUE_PACKET_BASE = 0xfffffff009f4be9c
+QUEUE_CHUNK_PARSER_SLOT = LIVE_QUEUE_VTABLE + 0xc8
+QUEUE_CHUNK_PARSER_ENCODING = 0x8011006d02f47d6c
+QUEUE_CHUNK_PARSER = 0xfffffff009f4bd6c
+QUEUE_KERNEL_COMMAND_SLOT = LIVE_QUEUE_VTABLE + 0xd0
+QUEUE_KERNEL_COMMAND_ENCODING = 0x8011fa0f018007ac
+QUEUE_KERNEL_COMMAND = 0xfffffff0088047ac
 COMMAND_BUFFER_CLASS_NAME = 0xfffffff0070fab0d
 COMMAND_BUFFER_VTABLE = 0xfffffff007b17410
 COMMAND_BUFFER_INIT_SLOT = COMMAND_BUFFER_VTABLE + 0x78
@@ -301,6 +307,14 @@ EXPECTED_EMPTY_PACKET_PATH = {
     0xfffffff009f1ae38: ("ldr", "w1, [x8]"),
     0xfffffff009f1ae3c: ("ldr", "x0, [x22, #0x120]"),
     0xfffffff009f1ae74: ("bl", "#0xfffffff009f49254"),
+    0xfffffff009f4bec8: ("ldr", "x0, [x0, #0x490]"),
+    0xfffffff009f4becc: ("ldr", "w1, [x1]"),
+    0xfffffff009f4bed8: ("ldr", "w1, [x20, #8]"),
+    0xfffffff009f4bef8: ("ldr", "w1, [x20, #4]"),
+    0xfffffff009f4bf04: ("cmp", "x28, #0"),
+    0xfffffff009f4bf08: ("ccmp", "x0, #0, #4, ne"),
+    0xfffffff009f4bf3c: ("mov", "w8, #9"),
+    0xfffffff009f4bf40: ("str", "w8, [x22, #0x528]"),
     0xfffffff009f4c150: ("cmp", "x26, #0x10"),
     0xfffffff009f4c178: ("ldr", "w8, [x24, #0xc]"),
     0xfffffff009f4c17c: ("lsr", "w23, w8, #0x1f"),
@@ -319,6 +333,19 @@ EXPECTED_EMPTY_PACKET_PATH = {
     0xfffffff009f4c2bc: ("bl", "#0xfffffff009f2515c"),
     0xfffffff009f4c2d0: ("ldr", "x8, [x16, #0xa8]!"),
     0xfffffff009f4c2e8: ("blraa", "x8, x17"),
+    0xfffffff009f49d7c: ("ldr", "x0, [x0, #0x490]"),
+    0xfffffff009f49d80: ("ldr", "w1, [x1]"),
+    0xfffffff009f49d8c: ("ldr", "w1, [x23, #8]"),
+    0xfffffff009f49da8: ("ldr", "x0, [x21, #0x490]"),
+    0xfffffff009f49dac: ("ldr", "w1, [x23, #4]"),
+    0xfffffff009f4a1b4: ("subs", "x24, x27, #0x10"),
+    0xfffffff009f4a1b8: ("b.lo", "#0xfffffff009f4a5f0"),
+    0xfffffff009f4a1bc: ("ldr", "w27, [x25, #8]"),
+    0xfffffff009f4a1c0: ("cmp", "w27, #1"),
+    0xfffffff009f4a1c4: ("b.lt", "#0xfffffff009f4a5f0"),
+    0xfffffff009f4a5e8: ("mov", "w8, #0xa"),
+    0xfffffff009f4a5ec: ("str", "w8, [x21, #0x528]"),
+    0xfffffff009f4a5f0: ("ldr", "x16, [x20]"),
 }
 EXPECTED_SUBMIT_RECORD_CONTRACT = {
     0xfffffff009f43aa4: ("mov", "w8, #0x30"),
@@ -327,6 +354,51 @@ EXPECTED_SUBMIT_RECORD_CONTRACT = {
     0xfffffff009f1ae50: ("ldr", "w8, [x8, #0x268]"),
     0xfffffff009f1ae54: ("cmp", "x24, x8"),
     0xfffffff009f1ae58: ("b.ne", "#0xfffffff009f1af44"),
+}
+EXPECTED_NONEMPTY_PACKET_CONTROL = {
+    0xfffffff009f4c178: ("ldr", "w8, [x24, #0xc]"),
+    0xfffffff009f4c188: ("tst", "w8, #0x40000000"),
+    0xfffffff009f4c18c: ("csel", "w27, w10, wzr, eq"),
+    0xfffffff009f4c194: ("cmp", "w8, #2"),
+    0xfffffff009f4c19c: ("cmp", "w8, #1"),
+    0xfffffff009f4c1a0: ("b.eq", "#0xfffffff009f4c1c8"),
+    0xfffffff009f4c1cc: ("ldr", "w20, [x24, #8]"),
+    0xfffffff009f4c1d0: ("lsl", "x8, x20, #3"),
+    0xfffffff009f4c1d4: ("add", "x28, x8, #0x10"),
+    0xfffffff009f4c230: ("ldp", "w8, w9, [x19, #-4]"),
+    0xfffffff009f4c258: ("add", "x1, x25, x8"),
+    0xfffffff009f4c25c: ("add", "x2, x25, x9"),
+    0xfffffff009f4c26c: ("blraa", "x10, x17"),
+    0xfffffff009f4bda0: ("add", "x8, x1, #8"),
+    0xfffffff009f4bdac: ("ldr", "w8, [x1, #4]"),
+    0xfffffff009f4bdb0: ("adds", "x21, x1, x8"),
+    0xfffffff009f4bdbc: ("cmp", "w8, #8"),
+    0xfffffff009f4bdc4: ("ccmp", "x9, #0, #0, ls"),
+    0xfffffff009f4bddc: ("ldr", "x8, [x16, #0xd0]!"),
+    0xfffffff009f4bdf4: ("blraa", "x8, x17"),
+}
+EXPECTED_MDSID_COMMAND_ROUTE = {
+    0xfffffff0088047d0: ("mov", "x20, x2"),
+    0xfffffff0088047d4: ("mov", "x21, x1"),
+    0xfffffff008804834: ("bl", "#0xfffffff00885b21c"),
+    0xfffffff008804844: ("ldr", "w8, [sp, #0x38]"),
+    0xfffffff008804868: ("mov", "w9, #2"),
+    0xfffffff00880486c: ("movk", "w9, #1, lsl #16"),
+    0xfffffff008804870: ("cmp", "w8, w9"),
+    0xfffffff008804874: ("b.ne", "#0xfffffff008804e94"),
+    0xfffffff0088048bc: ("ldr", "x25, [x19, #0x490]"),
+    0xfffffff0088048c0: ("ldr", "x8, [x25, #0x178]"),
+    0xfffffff0088048c8: ("ldr", "x27, [x25, #0x48]"),
+    0xfffffff0088048cc: ("mov", "w9, #0xdabc"),
+    0xfffffff0088048d4: ("ldr", "w9, [x9]"),
+    0xfffffff0088048ec: ("add", "x9, x27, #0x15, lsl #12"),
+    0xfffffff0088048f0: ("add", "x21, x9, #0x98"),
+    0xfffffff0088048f4: ("mov", "w9, #0xf018"),
+    0xfffffff008804938: ("ldr", "x21, [x28, #8]"),
+    0xfffffff008804940: ("movk", "w8, #1, lsl #16"),
+    0xfffffff008804944: ("ldr", "x8, [x21, x8]"),
+    0xfffffff008804948: ("ldr", "x0, [x8, #0x50]"),
+    0xfffffff008804984: ("ldr", "w8, [x21, #0x498]"),
 }
 EXPECTED_OLD_SELECTOR_0 = {
     0xfffffff009f1c6f8: ("bl", "#0xfffffff009f38aa8"),
@@ -678,8 +750,80 @@ def verify_queue_packet_route(agx: MachOImage, iogpu: MachOImage) -> dict:
         "all_zero_header_command_dispatch_skipped": True,
         "all_zero_header_finalizer_target": f"{QUEUE_EMPTY_FINALIZER:#x}",
         "all_zero_header_complete_effects_bounded": False,
+        "record_layout": {
+            "required_owned_object_ids": ["+0x0", "+0x4"],
+            "optional_object_id": "+0x8",
+            "control_buffer_command_header": "+0xc",
+            "backend_context": "+0x18",
+            "batch_sideband": "+0x20",
+        },
+        "invalid_required_object_status": 9,
+        "zero_count_field": "control-buffer+0x8",
+        "zero_count_finalizer_cleanup_without_status_error": True,
+        "nonempty_format_error_status": 10,
+        "predicted_bounded_probe_status": 0,
+        "predicted_bounded_probe_path": [
+            "selector-25 wrapper accepts 0x30 record",
+            "temporary AGXBlockFence backend is prepared",
+            "two required owned buffer IDs resolve",
+            "zero command header selects empty-record path",
+            "zero item count selects finalizer cleanup",
+            "backend is released on normal return",
+        ],
+        "runtime_effective_firmware_callback_must_be_identity_checked": True,
         "submit_record_size": "0x30",
         "submit_record_size_field": "device+0x268",
+    }
+
+
+def verify_nonempty_mdsid_route(agx: MachOImage, iogpu: MachOImage) -> dict:
+    entries = validate_indirect_entries(agx.read_u64, (
+        ("queue-command-chunk-parser", QUEUE_CHUNK_PARSER_SLOT,
+         QUEUE_CHUNK_PARSER_ENCODING, QUEUE_CHUNK_PARSER),
+        ("queue-kernel-command-dispatch", QUEUE_KERNEL_COMMAND_SLOT,
+         QUEUE_KERNEL_COMMAND_ENCODING, QUEUE_KERNEL_COMMAND),
+    ))
+    verify_instructions(iogpu, EXPECTED_NONEMPTY_PACKET_CONTROL)
+    verify_instructions(agx, EXPECTED_MDSID_COMMAND_ROUTE)
+    return {
+        "vtable_entries": entries,
+        "submit_record": {
+            "size": "0x30",
+            "primary_buffer_id": "+0x0",
+            "control_buffer_id": "+0x4",
+            "optional_buffer_id": "+0x8 (zero)",
+        },
+        "primary_buffer": {
+            "+0x0 command": "0x10002",
+            "+0x4 command_size": "0x10",
+            "+0x8 reserved": "0x0",
+        },
+        "control_buffer": {
+            "+0x8 range_count": 1,
+            "+0xc range_header": "0x40000001",
+            "+0x10 range_start": "0x0",
+            "+0x14 range_end": "0x10",
+        },
+        "parser_contract": {
+            "command_minimum_size": "0x8",
+            "command_size_alignment": "0x4",
+            "range_entry_size": "0x8",
+            "range_table_offset": "0x10",
+        },
+        "kernel_command": "0x10002",
+        "kernel_command_target": f"{QUEUE_KERNEL_COMMAND:#x}",
+        "mdsid_offsets": {
+            "IOGPUDevice.MDSID_map": "0x178",
+            "IOGPUDevice.IOGPU": "0x48",
+            "IOGPU.dsids_supported": "0xdabc",
+            "IOGPU.fence_value": "0x15098",
+            "IOGPU.state": "0xf020",
+            "IOGPUState.memory_map_slot": "0x152a0",
+            "IOGPUMapSlot.memory_map": "0x50",
+            "IOGPUState.buffer_offset": "0x498",
+        },
+        "static_route_established": True,
+        "runtime_submission_observed": False,
     }
 
 
@@ -899,6 +1043,7 @@ def audit(path: pathlib.Path, journal: pathlib.Path | None = None) -> dict:
     backend_cleanup = verify_block_fence_cleanup(agx, kernel, process)
     base_helper = verify_base_init_helper(image, kernel)
     queue_packet_route = verify_queue_packet_route(agx, image)
+    nonempty_mdsid_route = verify_nonempty_mdsid_route(agx, image)
     command_buffer_callback = verify_command_buffer_callback(agx)
     firmware_callback_candidate = verify_firmware_callback_candidate(agx, kernel)
 
@@ -929,6 +1074,7 @@ def audit(path: pathlib.Path, journal: pathlib.Path | None = None) -> dict:
             "complete_effects_bounded": False,
         },
         "observed_queue_packet_route": queue_packet_route,
+        "static_nonempty_mdsid_route": nonempty_mdsid_route,
         "static_command_buffer_callback": command_buffer_callback,
         "static_firmware_callback_candidate": firmware_callback_candidate,
         "parser_only_selector25_device_test_bounded": False,

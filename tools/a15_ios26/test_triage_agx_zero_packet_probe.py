@@ -4,7 +4,7 @@ from test_triage_agx_iouat_object_probe import event
 from test_triage_agx_packet_route_identity_probe import complete_run as route_run
 from triage_agx_owned_queue_probe import detail
 from triage_agx_packet_route_identity_probe import REVISION as ROUTE_REVISION
-from triage_agx_zero_packet_probe import REQUIRED, REVISION, triage
+from triage_agx_zero_packet_probe import REQUIRED, REVISION, render_compact, triage
 
 
 def complete_run():
@@ -59,6 +59,12 @@ class ZeroPacketTriageTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "agx_zero_packet_cleanup_observed")
         self.assertTrue(report["zero_packet_observation_ok"])
         self.assertEqual(report["selector25_attempts"], 1)
+        self.assertEqual(report["selector25_call"]["kr"], "0x0")
+        self.assertIsNone(report["first_blocked_checkpoint"])
+        compact = render_compact(report)
+        self.assertIn("record_abi: 0x30 (ok)", compact)
+        self.assertIn("selector25: status=PASS kr=0x0 output=0x0 attempts=1", compact)
+        self.assertIn("first_blocked: none", compact)
 
     def test_missing_post_snapshot_is_incomplete(self):
         run = [item for item in complete_run() if item["stage"] !=
@@ -93,6 +99,19 @@ class ZeroPacketTriageTests(unittest.TestCase):
                       "titan.zero-packet.record-contract")
         record["detail"] = record["detail"].replace("0x30/0x30", "0x38/0x38")
         self.assertEqual(triage(run, "run-a")["verdict"], "incomplete_or_blocked")
+
+    def test_compact_output_names_first_blocked_checkpoint(self):
+        run = complete_run()
+        call = next(item for item in run if item["stage"] ==
+                    "titan.zero-packet.call" and item["status"] == "PASS")
+        call["status"] = "BLOCKED"
+        call["detail"] = "kr=0xe00002c2 output-count=1 output=0x0 attempt=1/1"
+        report = triage(run, "run-a")
+        self.assertEqual(report["first_blocked_checkpoint"]["stage"],
+                         "titan.zero-packet.call")
+        compact = render_compact(report)
+        self.assertIn("selector25: status=BLOCKED kr=0xe00002c2", compact)
+        self.assertIn("first_blocked: titan.zero-packet.call", compact)
 
 
 if __name__ == "__main__":

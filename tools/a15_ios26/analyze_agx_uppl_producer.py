@@ -560,6 +560,274 @@ def analyze_gxf_map_producer(
     }
 
 
+def _recover_constant_gxf_command(
+    instructions: Sequence[dict], call_index: int
+) -> dict:
+    by_address = {item["address"]: item for item in instructions}
+    window_start = max(0, call_index - 24)
+    for index in range(call_index - 1, window_start - 1, -1):
+        candidate = instructions[index]
+        if candidate["mnemonic"] != "mov":
+            continue
+        parts = [part.strip().lower() for part in candidate["op_str"].split(",")]
+        if len(parts) != 2 or parts[0] != "w8":
+            continue
+        command = parse_immediate_operand(parts[1])
+        if command is None:
+            continue
+
+        packet_store = next(
+            (
+                item
+                for item in instructions[index + 1 : call_index]
+                if item["mnemonic"] in {"str", "stur", "stp"}
+                and any(
+                    part.strip() == "w8"
+                    for part in item["op_str"].lower().split(",")[:2]
+                )
+            ),
+            None,
+        )
+        serializer_call = None
+        if packet_store is None:
+            for item in instructions[index + 1 : call_index]:
+                target = _gfx_branch_target(item)
+                target_instruction = by_address.get(target)
+                if (
+                    item["mnemonic"] == "bl"
+                    and target_instruction is not None
+                    and target_instruction["mnemonic"] in {"str", "stur", "stp"}
+                    and target_instruction["op_str"].lower().startswith("w8,")
+                ):
+                    serializer_call = item
+                    break
+        if packet_store is None and serializer_call is None:
+            continue
+        return {
+            "command": command,
+            "assignment": candidate["address"],
+            "packet_store": packet_store["address"] if packet_store else None,
+            "serializer_call": (
+                serializer_call["address"] if serializer_call else None
+            ),
+            "serializer": (
+                _gfx_branch_target(serializer_call) if serializer_call else None
+            ),
+        }
+    return {
+        "command": None,
+        "assignment": None,
+        "packet_store": None,
+        "serializer_call": None,
+        "serializer": None,
+    }
+
+
+def _gfx_stack_packet_forwarder(
+    instructions: Sequence[dict], call_index: int
+) -> dict | None:
+    """Recognize the leaf helper that serializes w8 then tail-calls submit."""
+    if call_index < 2:
+        return None
+    move = instructions[call_index - 2]
+    store = instructions[call_index - 1]
+    branch = instructions[call_index]
+    if (
+        move["address"] + move["size"] == store["address"]
+        and store["address"] + store["size"] == branch["address"]
+        and move["mnemonic"] == "mov"
+        and move["op_str"].lower() == "x0, sp"
+        and store["mnemonic"] in {"str", "stur"}
+        and store["op_str"].replace(" ", "").lower() == "w8,[sp]"
+        and branch["mnemonic"] == "b"
+    ):
+        return {
+            "address": move["address"],
+            "command_store": store["address"],
+            "tail_callsite": branch["address"],
+        }
+    return None
+
+
+def _recover_forwarded_gxf_command(
+    instructions: Sequence[dict],
+    call_index: int,
+    forwarder: dict,
+) -> dict:
+    function_start = _gfx_function_start(instructions, call_index)
+    window_start = max(0, call_index - 24)
+    if function_start is not None:
+        window_start = max(
+            window_start,
+            next(
+                (
+                    index
+                    for index, instruction in enumerate(instructions)
+                    if instruction["address"] == function_start
+                ),
+                window_start,
+            ),
+        )
+    for index in range(call_index - 1, window_start - 1, -1):
+        candidate = instructions[index]
+        if candidate["mnemonic"] != "mov":
+            continue
+        parts = [part.strip().lower() for part in candidate["op_str"].split(",")]
+        if len(parts) != 2 or parts[0] != "w8":
+            continue
+        command = parse_immediate_operand(parts[1])
+        if command is None:
+            continue
+        return {
+            "command": command,
+            "assignment": candidate["address"],
+            "packet_store": forwarder["command_store"],
+            "serializer_call": instructions[call_index]["address"],
+            "serializer": forwarder["address"],
+        }
+    return {
+        "command": None,
+        "assignment": None,
+        "packet_store": forwarder["command_store"],
+        "serializer_call": instructions[call_index]["address"],
+        "serializer": forwarder["address"],
+    }
+
+
+def analyze_gxf_command_producers(
+    image: MappedImage, instructions: Sequence[dict]
+) -> dict:
+    """Census direct and leaf-forwarded constant local GXF packet producers."""
+    enter = image.symbols.get("__mmu_gxf_enter")
+    if enter is None:
+        return {"status": "GXF_ENTER_NOT_FOUND"}
+
+    enter_callers = _gfx_direct_callers(instructions, enter)
+    wrapper_functions = sorted(
+        {
+            item["function"]
+            for item in enter_callers
+            if item["function"] is not None
+        }
+    )
+    if len(wrapper_functions) != 1:
+        return {
+            "status": "GXF_SUBMIT_WRAPPER_UNRESOLVED",
+            "gxf_enter": enter,
+            "enter_callers": enter_callers,
+        }
+
+    submit_wrapper = wrapper_functions[0]
+    callers = _gfx_direct_callers(instructions, submit_wrapper)
+    by_address = {
+        instruction["address"]: index
+        for index, instruction in enumerate(instructions)
+    }
+    direct_callsites = []
+    producer_callsites = []
+    forwarding_wrappers = []
+    for caller in callers:
+        index = by_address.get(caller["callsite"])
+        forwarder = (
+            _gfx_stack_packet_forwarder(instructions, index)
+            if index is not None
+            else None
+        )
+        if forwarder is not None:
+            forwarded_callsites = []
+            for forwarded_caller in _gfx_direct_callers(
+                instructions, forwarder["address"]
+            ):
+                forwarded_index = by_address.get(forwarded_caller["callsite"])
+                recovered = (
+                    _recover_forwarded_gxf_command(
+                        instructions, forwarded_index, forwarder
+                    )
+                    if forwarded_index is not None
+                    else {
+                        "command": None,
+                        "assignment": None,
+                        "packet_store": None,
+                        "serializer_call": None,
+                        "serializer": None,
+                    }
+                )
+                row = {
+                    **forwarded_caller,
+                    **recovered,
+                    "route": "leaf_forwarder",
+                    "forwarder": forwarder["address"],
+                }
+                forwarded_callsites.append(row)
+                producer_callsites.append(row)
+            forwarding_wrappers.append(
+                {
+                    **forwarder,
+                    "exact_pointer_references": _gfx_exact_pointer_references(
+                        image, forwarder["address"]
+                    ),
+                    "callsites": forwarded_callsites,
+                }
+            )
+            direct_callsites.append(
+                {
+                    **caller,
+                    "command": None,
+                    "assignment": None,
+                    "packet_store": forwarder["command_store"],
+                    "serializer_call": None,
+                    "serializer": None,
+                    "route": "forwarding_wrapper",
+                    "forwarder": forwarder["address"],
+                }
+            )
+            continue
+
+        recovered = (
+            _recover_constant_gxf_command(instructions, index)
+            if index is not None
+            else {
+                "command": None,
+                "assignment": None,
+                "packet_store": None,
+                "serializer_call": None,
+                "serializer": None,
+            }
+        )
+        row = {**caller, **recovered, "route": "direct"}
+        direct_callsites.append(row)
+        producer_callsites.append(row)
+
+    commands = sorted(
+        {
+            item["command"]
+            for item in producer_callsites
+            if item["command"] is not None
+        }
+    )
+    return {
+        "status": "DIRECT_CALLSITE_CENSUS_COMPLETE",
+        "gxf_enter": enter,
+        "submit_wrapper": submit_wrapper,
+        "submit_wrapper_exact_pointer_references": _gfx_exact_pointer_references(
+            image, submit_wrapper
+        ),
+        "callsites": producer_callsites,
+        "direct_submit_callsites": direct_callsites,
+        "forwarding_wrappers": forwarding_wrappers,
+        "local_constant_commands": commands,
+        "command_0x20_local_producer_observed": 0x20 in commands,
+        "command_3_local_producer_observed": 3 in commands,
+        "indirect_or_runtime_producers_resolved": False,
+        "interpretation": (
+            "The direct submit-wrapper callsites and local leaf forwarding wrappers "
+            "are classified for constant packets. Missing command IDs remain "
+            "dispatcher-only unless a separate indirect or runtime producer is "
+            "demonstrated."
+        ),
+    }
+
+
 def analyze_gfx_handoff_consumers(
     instructions: Sequence[dict], symbols: dict[str, int]
 ) -> dict:
@@ -837,6 +1105,158 @@ def recover_uat_leaf_mapping_contract(
             "requested_mapping_classes": [1, 2] if confirmed else [],
         }
     return {"status": "NOT_FOUND", "requested_mapping_classes": []}
+
+
+def decode_uat_map_options_matrix(table: bytes, reject_mask: int) -> list[dict]:
+    """Decode only the four option bits used by the observed leaf selector."""
+    if len(table) != 16 or reject_mask < 0 or reject_mask > 0xFFFF:
+        raise ValueError("invalid UAT selector table or reject mask")
+    entries = []
+    for selector, value in enumerate(table):
+        rejected = bool(reject_mask & (1 << selector))
+        if rejected != (value == 0xFF) or (not rejected and value > 0xF):
+            raise ValueError("UAT selector mask and table disagree")
+        mapping_class = None
+        if not rejected:
+            first_hs = ((value - 5) & 0xFFFFFFFF) >= 3
+            second_hs = ((value - 9) & 0xFFFFFFFFFFFFFFFF) >= 2 if first_hs else False
+            final_eq = (value & 0xE) == 2 if second_hs else True
+            mapping_class = 1 + int(final_eq)
+        entries.append(
+            {
+                "selector": selector,
+                "map_options_selector_bits": ((selector & 3) << 8)
+                | ((selector >> 2) & 3),
+                "table_value": value,
+                "selector_rejected": rejected,
+                "requested_mapping_class": mapping_class,
+            }
+        )
+    return entries
+
+
+def recover_uat_map_options_matrix(
+    image: MachOImage, body: Sequence, register_mapping: int
+) -> dict:
+    """Require the exact observed selector and class computation before decoding."""
+    call_index = next(
+        (
+            index
+            for index, item in enumerate(body)
+            if item.mnemonic == "bl" and _branch_target(item) == register_mapping
+        ),
+        None,
+    )
+    if call_index is None:
+        return {"status": "NOT_FOUND", "entries": []}
+    window = body[max(0, call_index - 80) : call_index]
+    source_index = next(
+        (
+            index
+            for index, item in enumerate(window)
+            if item.mnemonic == "ldr" and item.op_str.lower() == "w8, [x19, #0x40]"
+        ),
+        None,
+    )
+    if source_index is None:
+        return {"status": "PARTIAL", "entries": []}
+    selector_shape = [
+        ("and", "x11, x8, #0x200"),
+        ("and", "x9, x8, #1"),
+        ("and", "x13, x8, #2"),
+        ("ubfx", "x12, x11, #8, #0x18"),
+        ("ubfx", "x10, x8, #8, #1"),
+        ("orr", "w14, w9, w13"),
+        ("orr", "w12, w12, w14, lsl #2"),
+        ("orr", "w12, w12, w10"),
+        ("mov", "w14, #0x4ac0"),
+        ("lsr", "x14, x14, x12"),
+    ]
+    selector_insns = window[source_index + 1 : source_index + 11]
+    if [
+        (item.mnemonic, item.op_str.lower()) for item in selector_insns
+    ] != selector_shape:
+        return {"status": "PARTIAL", "entries": []}
+    gate = window[source_index + 11 : source_index + 16]
+    if (
+        len(gate) != 5
+        or gate[0].mnemonic != "tbnz"
+        or not gate[0].op_str.lower().startswith("w14, #0, ")
+        or (gate[1].mnemonic, gate[1].op_str.lower())
+        != ("and", "x23, x27, #0xfffffffff000")
+        or gate[2].mnemonic != "adrp"
+        or not gate[2].op_str.lower().startswith("x9, #")
+        or gate[3].mnemonic != "add"
+        or (gate[4].mnemonic, gate[4].op_str.lower())
+        != ("add", "x9, x9, x12")
+    ):
+        return {"status": "PARTIAL", "entries": []}
+    page = parse_immediate_operand(gate[2].op_str.split(",", 1)[1].strip())
+    offset = parse_immediate_operand(gate[3].op_str.split(",")[-1].strip())
+    add_parts = [part.strip().lower() for part in gate[3].op_str.split(",")]
+    if (
+        page is None
+        or offset is None
+        or len(add_parts) != 3
+        or add_parts[:2] != ["x9", "x9"]
+    ):
+        return {"status": "PARTIAL", "entries": []}
+    lookup_index = next(
+        (
+            index
+            for index, item in enumerate(window)
+            if item.mnemonic == "ldrb" and item.op_str.lower() == "w9, [x9]"
+        ),
+        None,
+    )
+    class_shape = [
+        ("lsl", "w10, w9, #4"),
+        ("and", "x26, x10, #0xc0"),
+        ("and", "w28, w9, #3"),
+        ("ubfx", "x9, x28, #0, #0xb"),
+        ("orr", "x9, x9, x26, lsr #4"),
+        ("and", "w10, w9, #0xe"),
+        ("sub", "w11, w9, #5"),
+        ("sub", "x9, x9, #9"),
+        ("cmp", "w11, #3"),
+        ("ccmp", "x9, #2, #0, hs"),
+        ("ccmp", "w10, #2, #4, hs"),
+        ("cset", "w10, eq"),
+        ("mov", "w9, #1"),
+        ("cinc", "w9, w9, eq"),
+    ]
+    if lookup_index is None or [
+        (item.mnemonic, item.op_str.lower())
+        for item in window[lookup_index + 1 : lookup_index + 15]
+    ] != class_shape:
+        return {"status": "PARTIAL", "entries": []}
+    if [
+        (item.mnemonic, item.op_str.lower()) for item in window[-2:]
+    ] != [("and", "w1, w9, #0xff"), ("mov", "x0, x23")]:
+        return {"status": "PARTIAL", "entries": []}
+    table_address = page + offset
+    table = image.mapped_bytes(table_address, 16)
+    if table is None:
+        return {"status": "PARTIAL", "lookup_table": table_address, "entries": []}
+    try:
+        reject_mask = parse_immediate_operand(selector_insns[8].op_str.split(",")[-1])
+        if reject_mask is None:
+            return {"status": "PARTIAL", "lookup_table": table_address, "entries": []}
+        entries = decode_uat_map_options_matrix(table, reject_mask)
+    except ValueError:
+        return {"status": "PARTIAL", "lookup_table": table_address, "entries": []}
+    return {
+        "status": "UAT_MAP_OPTIONS_MATRIX_CONFIRMED",
+        "lookup_table": table_address,
+        "reject_mask": reject_mask,
+        "selector_source": window[source_index].address,
+        "class_source": window[lookup_index].address,
+        "entries": entries,
+        "scope": (
+            "selector gate and ordinary leaf-registration path only; "
+            "other guards remain"
+        ),
+    }
 
 
 def recover_legacy_uat_leaf_mapping_contract(
@@ -1866,6 +2286,11 @@ def analyze_sptm_uat_frame_policy(image: MachOImage) -> dict:
         if typed_frame_acquire
         else recover_legacy_uat_leaf_mapping_contract(map_body, register_mapping)
     )
+    leaf_mapping_contract["map_options_matrix"] = (
+        recover_uat_map_options_matrix(image, map_body, register_mapping)
+        if typed_frame_acquire
+        else {"status": "NOT_APPLICABLE", "entries": []}
+    )
     legacy_mapping_policy = (
         {"status": "NOT_APPLICABLE", "accepted_frame_types": []}
         if typed_frame_acquire
@@ -2495,6 +2920,7 @@ def analyze_gfx_uppl(path: pathlib.Path) -> dict:
     for image in parse_gfx_images(path):
         instructions = disassemble_gfx_text(image)
         gxf_map_producer = analyze_gxf_map_producer(image, instructions)
+        gxf_command_producers = analyze_gxf_command_producers(image, instructions)
         handoff_consumers = analyze_gfx_handoff_consumers(
             instructions, image.symbols
         )
@@ -2688,6 +3114,7 @@ def analyze_gfx_uppl(path: pathlib.Path) -> dict:
                     ),
                 },
                 "gxf_map_producer": gxf_map_producer,
+                "gxf_command_producers": gxf_command_producers,
                 "handoff_consumers": handoff_consumers,
                 "producer_status": (
                     "ZERO_WEAK_DEFAULT_NO_PRODUCER_OBSERVED"
@@ -2908,6 +3335,27 @@ def render_markdown(report: dict) -> str:
                     "  Legacy registration modes: "
                     f"`{leaf_contract['legacy_registration_modes']}`; these are "
                     "not the iOS 26 mapping-class values."
+                )
+            matrix = leaf_contract.get("map_options_matrix", {})
+            if matrix.get("status") == "UAT_MAP_OPTIONS_MATRIX_CONFIRMED":
+                classes = {
+                    mapping_class: [
+                        entry["selector"]
+                        for entry in matrix["entries"]
+                        if entry["requested_mapping_class"] == mapping_class
+                    ]
+                    for mapping_class in (1, 2)
+                }
+                rejected = [
+                    entry["selector"]
+                    for entry in matrix["entries"]
+                    if entry["selector_rejected"]
+                ]
+                lines.append(
+                    f"  Map-option selector matrix: `0x{matrix['lookup_table']:x}`; "
+                    f"class 1 selectors `{classes[1]}`, class 2 selectors "
+                    f"`{classes[2]}`, rejected `{rejected}`. This is not proof "
+                    "that upstream map requests or physical addresses are controllable."
                 )
         legacy_policy = policy.get("legacy_mapping_policy", {})
         if legacy_policy.get("accepted_frame_types"):

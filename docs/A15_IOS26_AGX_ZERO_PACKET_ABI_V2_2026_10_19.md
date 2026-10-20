@@ -30,6 +30,23 @@ V2 performs one bounded correction:
 5. Stop after cleanup observation; do not retry or continue to MMIO, physical
    writes, protected writes, SPTM/TXM policy changes, bootstrap, or Sileo.
 
+The exact-image parser also fixes the meaning of the leading record fields:
+
+```text
++0x00  required owned buffer ID
++0x04  required owned buffer ID
++0x08  optional object ID; also the zero-count field in the empty finalizer
++0x0c  command header in the owned buffer
+```
+
+The probe already writes the same valid owned buffer ID at `+0x00` and `+0x04`.
+It leaves the 16 KiB owned buffer itself zeroed. Static control-flow therefore
+predicts the zero command-header path, then the zero-count finalizer cleanup,
+without assigning queue status 9 (missing required object) or 10 (nonempty
+format error). Assuming the live identities remain those measured by the prior
+probe, the expected bounded result is `kr=0`, scalar status `0`, a released
+temporary backend, and an unchanged zeroed buffer.
+
 This revision tests only whether the corrected record reaches and exits the
 empty-record batch path cleanly. Success does not establish a physical-write
 primitive or SPTM authority.

@@ -5,6 +5,7 @@ from analyze_agx_uppl_producer import (
     _recent_register_immediate,
     _recent_w2_immediate,
     analyze_gfx_handoff_consumers,
+    analyze_gxf_command_producers,
     analyze_gxf_map_producer,
     classify_retype_callback,
     collect_frame_type_names,
@@ -12,6 +13,7 @@ from analyze_agx_uppl_producer import (
     decode_domain_bitmap,
     decode_frame_type_policy_record,
     decode_patch_descriptor_bytes,
+    decode_uat_map_options_matrix,
     recover_argument_bindings,
     recover_genter_dispatch_routes,
     recover_legacy_register_mapping_policy,
@@ -21,6 +23,7 @@ from analyze_agx_uppl_producer import (
     recover_stage2_root_acquire_contract,
     recover_stage2_root_retype_contract,
     recover_uat_leaf_mapping_contract,
+    recover_uat_map_options_matrix,
     summarize_domain_mapping_policy,
 )
 
@@ -78,6 +81,37 @@ class PatchDescriptorTests(unittest.TestCase):
             decode_domain_bitmap(0x84, {7: "uat"}),
             [{"id": 2, "name": None}, {"id": 7, "name": "uat"}],
         )
+
+    def test_decodes_exact_uat_selector_matrix(self) -> None:
+        table = bytes.fromhex("0008090a0401ffff05ff02ff0607ff03")
+        entries = decode_uat_map_options_matrix(table, 0x4AC0)
+        self.assertEqual(
+            [entry["selector"] for entry in entries if entry["selector_rejected"]],
+            [6, 7, 9, 11, 14],
+        )
+        self.assertEqual(
+            [
+                entry["selector"]
+                for entry in entries
+                if entry["requested_mapping_class"] == 1
+            ],
+            [0, 1, 4, 5],
+        )
+        self.assertEqual(
+            [
+                entry["selector"]
+                for entry in entries
+                if entry["requested_mapping_class"] == 2
+            ],
+            [2, 3, 8, 10, 12, 13, 15],
+        )
+        self.assertEqual(entries[5]["map_options_selector_bits"], 0x101)
+
+    def test_rejects_inconsistent_uat_selector_table(self) -> None:
+        table = bytearray.fromhex("0008090a0401ffff05ff02ff0607ff03")
+        table[6] = 2
+        with self.assertRaises(ValueError):
+            decode_uat_map_options_matrix(bytes(table), 0x4AC0)
 
     def test_classifies_null_retype_callback(self) -> None:
         self.assertEqual(
@@ -267,6 +301,61 @@ class RegistrationCallTests(unittest.TestCase):
         self.assertEqual(result["physical_page_mask"], 0xFFFFFFFFF000)
         self.assertEqual(result["requested_mapping_classes"], [1, 2])
 
+    def test_uat_matrix_requires_matching_instruction_shape(self) -> None:
+        operations = [
+            ("ldr", "w8, [x19, #0x40]"),
+            ("and", "x11, x8, #0x200"),
+            ("and", "x9, x8, #1"),
+            ("and", "x13, x8, #2"),
+            ("ubfx", "x12, x11, #8, #0x18"),
+            ("ubfx", "x10, x8, #8, #1"),
+            ("orr", "w14, w9, w13"),
+            ("orr", "w12, w12, w14, lsl #2"),
+            ("orr", "w12, w12, w10"),
+            ("mov", "w14, #0x4ac0"),
+            ("lsr", "x14, x14, x12"),
+            ("tbnz", "w14, #0, #0x7000"),
+            ("and", "x23, x27, #0xfffffffff000"),
+            ("adrp", "x9, #0x4000"),
+            ("add", "x9, x9, #0x990"),
+            ("add", "x9, x9, x12"),
+            ("ldrb", "w9, [x9]"),
+            ("lsl", "w10, w9, #4"),
+            ("and", "x26, x10, #0xc0"),
+            ("and", "w28, w9, #3"),
+            ("ubfx", "x9, x28, #0, #0xb"),
+            ("orr", "x9, x9, x26, lsr #4"),
+            ("and", "w10, w9, #0xe"),
+            ("sub", "w11, w9, #5"),
+            ("sub", "x9, x9, #9"),
+            ("cmp", "w11, #3"),
+            ("ccmp", "x9, #2, #0, hs"),
+            ("ccmp", "w10, #2, #4, hs"),
+            ("cset", "w10, eq"),
+            ("mov", "w9, #1"),
+            ("cinc", "w9, w9, eq"),
+            ("and", "w1, w9, #0xff"),
+            ("mov", "x0, x23"),
+            ("bl", "#0x9000"),
+        ]
+        body = [
+            object_instruction(0x3000 + index * 4, mnemonic, operands)
+            for index, (mnemonic, operands) in enumerate(operations)
+        ]
+        image = SimpleNamespace(
+            mapped_bytes=lambda address, size: bytes.fromhex(
+                "0008090a0401ffff05ff02ff0607ff03"
+            ) if (address, size) == (0x4990, 16) else None
+        )
+        result = recover_uat_map_options_matrix(image, body, 0x9000)
+        self.assertEqual(result["status"], "UAT_MAP_OPTIONS_MATRIX_CONFIRMED")
+        self.assertEqual(result["lookup_table"], 0x4990)
+        body[8] = object_instruction(body[8].address, "orr", "w12, w12, w11")
+        self.assertEqual(
+            recover_uat_map_options_matrix(image, body, 0x9000)["status"],
+            "PARTIAL",
+        )
+
     def test_recovers_legacy_uat_leaf_mapping_contract(self) -> None:
         body = [
             object_instruction(0x3000, "and", "x23, x20, #0xfffffffff000"),
@@ -381,6 +470,90 @@ class RegistrationCallTests(unittest.TestCase):
 
 
 class GxfProducerTests(unittest.TestCase):
+    def test_censuses_constant_commands_and_keeps_0x20_unproven(self) -> None:
+        instructions = [
+            instruction(0x1000, "pacibsp"),
+            instruction(0x1004, "mov", "w8, #0x10"),
+            instruction(0x1008, "stur", "w8, [x29, #-0x10]"),
+            instruction(0x100C, "bl", "#0x2000"),
+            instruction(0x1010, "retab"),
+            instruction(0x1100, "pacibsp"),
+            instruction(0x1104, "mov", "w8, #0x21"),
+            instruction(0x1108, "stp", "w0, w8, [sp, #0xc]"),
+            instruction(0x110C, "bl", "#0x2000"),
+            instruction(0x1110, "retab"),
+            instruction(0x2000, "pacibsp"),
+            instruction(0x2004, "bl", "#0x3000"),
+            instruction(0x2008, "retab"),
+        ]
+        image = SimpleNamespace(
+            symbols={"__mmu_gxf_enter": 0x3000},
+            segments=[SimpleNamespace(vmaddr=0x8000, content=b"\0" * 64)],
+        )
+
+        result = analyze_gxf_command_producers(image, instructions)
+
+        self.assertEqual(result["status"], "DIRECT_CALLSITE_CENSUS_COMPLETE")
+        self.assertEqual(result["submit_wrapper"], 0x2000)
+        self.assertEqual(result["local_constant_commands"], [0x10, 0x21])
+        self.assertFalse(result["command_0x20_local_producer_observed"])
+        self.assertFalse(result["command_3_local_producer_observed"])
+
+    def test_marks_direct_0x20_constructor_when_present(self) -> None:
+        instructions = [
+            instruction(0x1000, "pacibsp"),
+            instruction(0x1004, "mov", "w8, #0x20"),
+            instruction(0x1008, "str", "w8, [sp]"),
+            instruction(0x100C, "bl", "#0x2000"),
+            instruction(0x1010, "retab"),
+            instruction(0x2000, "pacibsp"),
+            instruction(0x2004, "bl", "#0x3000"),
+            instruction(0x2008, "retab"),
+        ]
+        image = SimpleNamespace(
+            symbols={"__mmu_gxf_enter": 0x3000},
+            segments=[SimpleNamespace(vmaddr=0x8000, content=b"\0" * 64)],
+        )
+
+        result = analyze_gxf_command_producers(image, instructions)
+
+        self.assertEqual(result["local_constant_commands"], [0x20])
+        self.assertTrue(result["command_0x20_local_producer_observed"])
+
+    def test_traces_leaf_forwarder_callers_and_finds_commands_2_and_3(self) -> None:
+        instructions = [
+            instruction(0x1000, "pacibsp"),
+            instruction(0x1004, "mov", "w8, #2"),
+            instruction(0x1008, "bl", "#0x4000"),
+            instruction(0x100C, "retab"),
+            instruction(0x1100, "pacibsp"),
+            instruction(0x1104, "mov", "w8, #3"),
+            instruction(0x1108, "bl", "#0x4000"),
+            instruction(0x110C, "retab"),
+            instruction(0x2000, "pacibsp"),
+            instruction(0x2004, "bl", "#0x3000"),
+            instruction(0x2008, "retab"),
+            instruction(0x4000, "mov", "x0, sp"),
+            instruction(0x4004, "str", "w8, [sp]"),
+            instruction(0x4008, "b", "#0x2000"),
+        ]
+        image = SimpleNamespace(
+            symbols={"__mmu_gxf_enter": 0x3000},
+            segments=[SimpleNamespace(vmaddr=0x8000, content=b"\0" * 64)],
+        )
+
+        result = analyze_gxf_command_producers(image, instructions)
+
+        self.assertEqual(result["local_constant_commands"], [2, 3])
+        self.assertTrue(result["command_3_local_producer_observed"])
+        self.assertFalse(result["command_0x20_local_producer_observed"])
+        self.assertEqual(len(result["forwarding_wrappers"]), 1)
+        self.assertEqual(result["forwarding_wrappers"][0]["address"], 0x4000)
+        self.assertEqual(
+            [row["command"] for row in result["forwarding_wrappers"][0]["callsites"]],
+            [2, 3],
+        )
+
     def test_traces_command_constructor_to_bootstrap_producer(self) -> None:
         instructions = [
             instruction(0x1000, "pacibsp"),

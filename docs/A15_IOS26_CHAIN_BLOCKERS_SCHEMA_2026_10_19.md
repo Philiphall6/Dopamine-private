@@ -1,55 +1,76 @@
 # A15 / iOS 26.0.1 jailbreak-chain blockers
 
-Exact target: iPhone14,2, build 23A355.
+Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
 
 ```text
-[PASS] Exact target and kernel/SPTM/TXM artifacts
+[RUNTIME PASS] ClearSword KRW and reversible self-page alias write
    |
-[PASS] ClearSword kernel read/write primitive
+[RUNTIME PASS] Owned AGX mapping, kernel alias and same-client queue
    |
-[PASS] Reversible kernel-alias write to one app-owned 16 KiB page
+[STATIC PASS / DEVICE PENDING] Correct iOS 26 selector-25 ABI
+   |    selector 25, four scalars, 0x30-byte record
    |
-[PASS] AGX G14P service, ProbeConfig, GART, AGXUATMux and IOUAT identity
+[STATIC PASS] MDSID packet route and low-VA GXF-TTBR0 binding
    |
-[PASS] Own AGX user mapping and matching kernel DRAM alias
+[STATIC PASS] BEE7 active-root discovery
+   |    IOUAT+0x20 -> descriptor PA -> PAPT alias -> root0/root1
    |
-[PASS] Own same-client AGX command queue
+[STATIC PASS] Clone format known
+   |    one 16 KiB table, 2048 leaves, preserve live attribute bits
    |
-[PASS] Live firmware, AGXBlockFence backend and packet callback identities
+[STATIC PASS] RTBuddy AP-power message producer
+   |    states 0/1/3 -> payloads 0x201/0x20/0, RTKit class 0xb
    |
-[PASS] Selector-25 route identity and exact 0x30 record-size contract
+[STATIC PASS] RTBuddy G14P lifecycle -> live firmware vtable
+   |    start +0xa08, state +0x9c8/+0x9e0, completion +0xa10
    |
-[NEXT IPA] One selector-25 0x30 empty record
-   |          Required result: accepted call plus measured pool/backend cleanup
+[STATIC PASS] GXF class 0xb -> state worker -> command 3
    |
-[BLOCKED] Nonempty parser record and demonstrated owned-buffer consumption
+[STATIC PASS] Command 3 -> current-context registered root -> TTBR0_EL1
    |
-[BLOCKED] Controlled AGX/IOUAT mapping effect with independent physical readback
+[BLOCKER 1] Deterministic app-side power transition
+   |    Must request normal power and keep queue/context alive
    |
-[BLOCKED] Stable physical-write primitive
+[BLOCKER 2] Owned cloned-root acceptance
+   |    Firmware must accept owned DRAM as the registered root frame
    |
-[BLOCKED] Accepted SPTM/TXM operation with independent protected-state proof
+[BLOCKER 3] Corrected selector-25/MDSID runtime transport
+   |    Previous 0x38 record was rejected with 0xe00002c2; 0x30 is untested
    |
-[BLOCKED] Jailbreak policy changes, trust cache, bootstrap and userspace setup
+[BLOCKER 4] Safe rollback
+   |    Restore registry entry, trigger command 3 again, verify live TTBR0
    |
-[BLOCKED] Sileo launch and package-management validation
+[BLOCKED] Stable physical write independently observed and restored
+   |
+[BLOCKED] SPTM/PAPT policy bypass with protected-state proof
+   |
+[BLOCKED] Trust cache, jailbreak policy, bootstrap and Sileo
 ```
 
-Parallel routes do not currently bridge the chain:
+## Important separation
+
+The RTBuddy power transition does not require selector 25. It is the mechanism
+that causes firmware command 3 and the TTBR0 reload. Selector 25 is still
+required for the controlled MDSID writes that would patch the registered root
+entry and later exercise a low virtual address through the cloned root.
+
+## Closed alternatives
 
 | Route | Current state |
 |---|---|
-| Hypervisor | Framework, entitlement and device-tree virtualization support absent. |
-| GFX/RTKit MMIO | Disabled after unresolved SError provenance. |
-| Legacy Titan IPC copy | Disabled; Darwin 25 PAC/SMR and port layout invalidate the old assumptions. |
-| Selector 0 | Statically converges on the same stateful batch path; no parser-only shortcut. |
-| pmap/UPPL alternatives | No independently measured protected or physical write. |
+| Hypervisor | Framework, entitlement and device-tree virtualization support absent |
+| GFX/RTKit MMIO | Disabled after unresolved SError provenance |
+| Legacy Titan IPC copy | Old Darwin/PAC/SMR assumptions invalid |
+| Forged RTKit saved state | Closed by PACGA signature verification |
+| Hibernation fake TTBR | Closed by helper-derived `TTBR1_EL1` |
+| Simple context-ID reuse | Closed by lock-serialized BEE1 removal and free-list publication |
+| BEE6 arbitrary remap | Closed: only an existing tracked mapping can be prepared for unmap |
 
-The first bounded selector-25 call stopped at the pre-parser record-size gate:
-v1 supplied 0x38 while the live device contract is 0x30. The queue and firmware
-pool remained unchanged, so this did not reach the parser or firmware path.
-The chain currently reaches stable AGX route identity and the exact selector
-record-size contract, not SPTM authority.
-Even a successful zero-record observation would only clear the cleanup gate
-for that empty record; it would not clear the nonempty parser, physical-write,
-protected-memory, bootstrap, or Sileo gates.
+## Current decision
+
+This is now a coherent static physical-write candidate, not a working
+jailbreak. The direct G14P RTBuddy-to-firmware lifecycle is pinned and does not
+touch the user-client queue registry in its direct path, but runtime survival
+is not yet observed. The next useful IPA is exactly one corrected selector-25
+`0x30` contract probe. A power-transition observation comes only after that
+call is accepted; root replacement and protected writes remain disabled.

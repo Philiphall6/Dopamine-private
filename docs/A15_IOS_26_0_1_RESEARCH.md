@@ -21,6 +21,22 @@ consumer separately from SPTM's registered UAT endpoint table, proves the
 cross-version SPTM/GFX shared handoff, and isolates iOS 26's new dynamic GFX
 segment registration plus the downstream protected frame-type policy.
 
+## Current Unbuilt Diagnostic
+
+The working tree now contains a bounded `self-page-write-v1` probe for the
+exact target. It uses ClearSword's strict 0x20-byte write call against the
+kernel virtual alias of one pinned, app-owned page and requires independent
+kernel/app readback plus restoration before reporting success. This would be
+evidence of a kernel-virtual write to that app page only. It would not prove
+physical writing, modification of protected memory, SPTM/TXM bypass, or
+injection. The historical ClearSword `kwritebuf` wrapper masks underlying
+write errors, so its zero return value is specifically excluded as evidence.
+The source passes offline contract/integration tests but has not been built
+as an IPA or run on the phone. RTKit MMIO reads remain disabled following the
+unattributed GFX SError; the last device logs contain no self-page write
+checkpoint. See the final worklog entry and
+`tools/a15_ios26/triage_self_page_write_probe.py` for the acceptance rule.
+
 ## Latest Build Evidence
 
 - Source commit: `79b75bb81b4fc3e8f5a112c8d3a1b924e0cfff67`
@@ -686,7 +702,7 @@ GPU memory behavior, MMIO access, or a physical-write primitive.
 - The `IODeviceMemory` value is an `OSArray` with exactly two elements. Static
   kernel analysis identifies both elements as `IOGeneralMemoryDescriptor`
   objects.
-- Descriptor 0 covers physical range `0x206400000..0x20646ffff`
+- Descriptor 0 covers physical range `0x206400000..0x20646bfff`
   (`0x6c000` bytes). Descriptor 1 covers physical address `0x206050000` for
   `0x8` bytes, exactly matching the GFX IORVBAR from the DeviceTree.
 - Both descriptors have a non-null existing `_mappings` set. Target-kernel
@@ -1588,6 +1604,62 @@ panic, the exact A15 target now stops before that register read. A validated
 mapping is not proof that live MMIO access is safe or that RTKit metadata is
 reachable. The next evidence must come from offline firmware correlation or a
 non-MMIO source; no injection or SPTM/TXM bypass has been demonstrated.
+
+The subsequent exact-image selector analysis is recorded in
+`A15_IOS26_ROUTE_REASSESSMENT_2026_10_16.md` and in the regenerated
+`uat-options-v1` report. It decodes the option-to-class table while leaving
+the caller provenance and frame-policy boundary explicitly unresolved.
+
+## Exact AGX GART Link (2026-10-19)
+
+On `iPhone14,2` / `23A355`, ClearSword passed and a controlled 0x20-byte
+kernel-virtual write to an app-owned page was observed through both aliases,
+then restored. This is neither a physical write nor a modification of
+SPTM-protected memory. The next run observed AGX's global map-dispatch bit as
+`1` twice, while the validated service instance's candidate source bit was
+`0` twice. The proposed equality of those current values is falsified; no
+map call or IOUAT request was observed.
+
+The exact retained kernelcache instead provides a testable service-to-GART
+pointer path: service-start stores its GART candidate at `service+0xee80`;
+the `AGXGartG14` vtable is `0xfffffff007b1c4d8`; its setup stores a state
+pointer at `GART+0x2e8`. The `449016e` device run validated each link with
+repeat reads and found a state vtable `0xfffffff007b22ae0`. Exact-image
+class-tag and constructor checks identify it as `AGXUATMux`. The next
+bounded probe first requires a stable initialized global mode of 1, then
+checks its `+0x10` factory-result field against the expected vtable
+`0xfffffff007aed3a0`. The `eed8d43` device run observed a stable,
+non-null field and this exact unslid vtable twice, with mode and
+initialization marker both stably `1`. The persistent JSONL is
+`outputs/device/a15-iouat-object-v1-20261019/after.jsonl` (SHA-256
+`2FAA7538CEA433F28BB2D999B165CA2E4032D1A0D276673429A369EE15B527F9`),
+with 113 new checkpoints in one run and an unchanged baseline prefix.
+The matching object removes the null-factory blocker, but does not establish
+a map call or an accepted, caller-controlled descriptor. The next boundary
+is an observed shared-memory buffer alias and same-object packet lookup,
+before any protected request. No physical write, protected-memory change,
+or SPTM/TXM bypass is demonstrated. GFX MMIO remains disabled.
+
+The follow-up `4f3cc28` revision is an own-client shared-buffer test, not
+another protected-memory attempt. On the device, selector 12 returned an
+app-writable 16 KiB mapping and ID `1`, whose client registry slot named a
+validated buffer and map with the same address. A 0x20-byte change through
+the app mapping was observed through the kernel DRAM alias and restored.
+The append-only JSONL and complete offline triage are recorded in
+`A15_IOS26_AGX_SHARED_ALIAS_2026_10_19.md`. This proves a registered
+user-buffer alias, not packet consumption, physical writing, or any
+SPTM/TXM effect.
+
+The subsequent `0720986` own-client queue trial measured the G14P
+selector-6 input-size contract as `0x410`, created queue ID 1, and
+validated the queue's token, ready byte, table/device backreferences,
+and the original buffer in the same client. The persistent run has 202
+checkpoints and no reboot. This closes the queue-identity link, not the
+packet-consumption link. An exact-image control-flow audit then found that
+the queue-state write and backend virtual call are unavoidable before
+the active selector-25 parser dispatch on normal-return local paths.
+The parser-only device variant is therefore rejected pending a bounded
+backend-effect analysis. See `A15_IOS26_BLOCKERS_AFTER_QUEUE_2026_10_19.md`.
 
 ## pmap-tte-remove Cross-Check
 

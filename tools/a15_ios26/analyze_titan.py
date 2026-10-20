@@ -1431,12 +1431,406 @@ def analyze_mmu_mapping_contract(
     }
 
 
+def _resolve_adrp_add_global(body: list[dict], add_immediate: int) -> int | None:
+    for first, second in zip(body, body[1:]):
+        if first["mnemonic"] != "adrp" or second["mnemonic"] != "add":
+            continue
+        adrp_parts = [part.strip().lower() for part in first["op_str"].split(",")]
+        add_parts = [part.strip().lower() for part in second["op_str"].split(",")]
+        if (
+            len(adrp_parts) != 2
+            or len(add_parts) != 3
+            or add_parts[0] != adrp_parts[0]
+            or add_parts[1] != adrp_parts[0]
+            or parse_immediate_operand(add_parts[2]) != add_immediate
+        ):
+            continue
+        page = parse_immediate_operand(adrp_parts[1])
+        if page is not None:
+            return (page + add_immediate) & UINT64_MASK
+    return None
+
+
+def _recent_adrp_page(body: list[dict], index: int, register: str) -> int | None:
+    # The exact A15 bootstrap keeps x26 live for roughly 150 instructions
+    # between the registry-page ADRP and the context-count store.
+    for candidate in reversed(body[max(0, index - 256) : index]):
+        if candidate["mnemonic"] != "adrp":
+            continue
+        parts = [part.strip().lower() for part in candidate["op_str"].split(",")]
+        if len(parts) == 2 and parts[0] == register:
+            return parse_immediate_operand(parts[1])
+    return None
+
+
+def analyze_gxf_context_switch_contract(
+    image: MappedImage,
+    instructions: list[dict],
+) -> dict:
+    """Reconstruct the registered-context TTBR switch without claiming reachability."""
+    dispatcher_name = "__rtk_mmu_gxf_dispatcher"
+    wrapper_name = "__rtk_mmu_switch_region_base_by_contextID"
+    switch_name = "__rtk_mmu_switch_region_base"
+    wake_name = "__rtk_mmu_uat_wake"
+    bootstrap_name = "__rtk_arm_start_bootstrap_area"
+    dispatcher = instructions_for_symbol(
+        image, instructions, dispatcher_name, maximum_size=0x220
+    )
+    wrapper = instructions_for_symbol(
+        image, instructions, wrapper_name, maximum_size=0x180
+    )
+    low_level = instructions_for_symbol(
+        image, instructions, switch_name, maximum_size=0x120
+    )
+    wake = instructions_for_symbol(
+        image, instructions, wake_name, maximum_size=0x80
+    )
+    bootstrap = instructions_for_symbol(
+        image, instructions, bootstrap_name, maximum_size=0x900
+    )
+    required = {
+        dispatcher_name: dispatcher,
+        wrapper_name: wrapper,
+        switch_name: low_level,
+        wake_name: wake,
+        bootstrap_name: bootstrap,
+    }
+    missing = [name for name, body in required.items() if not body]
+    if missing:
+        return {
+            "status": "NOT_PRESENT",
+            "missing_symbols": missing,
+            "runtime_reachability": "UNPROVEN",
+        }
+
+    wrapper_address = image.symbols[wrapper_name]
+    low_level_address = image.symbols[switch_name]
+    command_compare = next(
+        (
+            item
+            for item in dispatcher
+            if item["mnemonic"] == "cmp"
+            and item["op_str"].lower() == "w21, #0x20"
+        ),
+        None,
+    )
+    payload_pointer_load = next(
+        (
+            item
+            for item in dispatcher
+            if item["mnemonic"] == "ldr"
+            and item["op_str"].lower() == "x8, [x8, #8]"
+        ),
+        None,
+    )
+    payload_pair_load = next(
+        (
+            item
+            for item in dispatcher
+            if item["mnemonic"] == "ldp"
+            and item["op_str"].lower() == "w0, w1, [x8]"
+        ),
+        None,
+    )
+    direct_authorization = next(
+        (
+            item
+            for item in dispatcher
+            if item["mnemonic"] == "mov"
+            and item["op_str"].lower() == "w2, #0"
+        ),
+        None,
+    )
+    wrapper_tail = next(
+        (
+            item
+            for item in dispatcher
+            if item["mnemonic"] == "b"
+            and direct_branch_target(item) == wrapper_address
+        ),
+        None,
+    )
+
+    registry_state = _resolve_adrp_add_global(wrapper, 0x1E0)
+    entry_stride_shift = next(
+        (
+            parse_immediate_operand(item["op_str"].split(",")[-1])
+            for item in wrapper
+            if item["mnemonic"] == "lsl"
+            and item["op_str"].lower().startswith("x8, x24,")
+        ),
+        None,
+    )
+    root_mask_instruction = next(
+        (
+            item
+            for item in wrapper
+            if item["mnemonic"] == "and"
+            and item["op_str"].lower().startswith("x1, x8, #")
+        ),
+        None,
+    )
+    root_mask = (
+        parse_immediate_operand(root_mask_instruction["op_str"].split(",")[-1])
+        if root_mask_instruction
+        else None
+    )
+    valid_bit_guard = next(
+        (
+            item
+            for item in wrapper
+            if item["mnemonic"] == "tbz"
+            and item["op_str"].lower().startswith("w8, #0,")
+        ),
+        None,
+    )
+    state_guard = next(
+        (
+            item
+            for item in wrapper
+            if item["mnemonic"] == "ldrb"
+            and item["op_str"].lower() == "w8, [x21, #0x638]"
+        ),
+        None,
+    )
+    authorization_guard = next(
+        (
+            item
+            for item in wrapper
+            if item["mnemonic"] == "tbnz"
+            and item["op_str"].lower().startswith("w22, #0,")
+        ),
+        None,
+    )
+    default_tcr_size = next(
+        (
+            parse_immediate_operand(item["op_str"].split(",")[-1])
+            for item in wrapper
+            if item["mnemonic"] == "mov"
+            and item["op_str"].lower().startswith("w2, #0x27")
+        ),
+        None,
+    )
+    low_level_call = next(
+        (
+            item
+            for item in wrapper
+            if item["mnemonic"] == "bl"
+            and direct_branch_target(item) == low_level_address
+        ),
+        None,
+    )
+    maximum_contexts = next(
+        (
+            parse_immediate_operand(item["op_str"].split(",")[-1])
+            for item in wrapper
+            if item["mnemonic"] == "cmp"
+            and item["op_str"].lower().startswith("x8, #0x40")
+        ),
+        None,
+    )
+
+    ttbr0_write = next(
+        (
+            item
+            for item in low_level
+            if item["mnemonic"] == "msr"
+            and item["op_str"].lower() == "ttbr0_el1, x20"
+        ),
+        None,
+    )
+    ttbr1_write = next(
+        (
+            item
+            for item in low_level
+            if item["mnemonic"] == "msr"
+            and item["op_str"].lower() == "ttbr1_el1, x20"
+        ),
+        None,
+    )
+    tcr_write = next(
+        (
+            item
+            for item in low_level
+            if item["mnemonic"] == "msr"
+            and item["op_str"].lower() == "tcr_el1, x8"
+        ),
+        None,
+    )
+
+    wake_authorization = next(
+        (
+            item
+            for item in wake
+            if item["mnemonic"] == "mov"
+            and item["op_str"].lower() == "w2, #1"
+        ),
+        None,
+    )
+    wake_call = next(
+        (
+            item
+            for item in wake
+            if item["mnemonic"] == "bl"
+            and direct_branch_target(item) == wrapper_address
+        ),
+        None,
+    )
+    wake_context_id = next(
+        (
+            item
+            for item in wake
+            if item["mnemonic"] == "ldr"
+            and item["op_str"].lower() == "w1, [x8, #0x1f8]"
+        ),
+        None,
+    )
+
+    table_store = None
+    count_store = None
+    for index, item in enumerate(bootstrap):
+        if item["mnemonic"] != "str":
+            continue
+        parts = [part.strip().lower() for part in item["op_str"].split(",", 1)]
+        if len(parts) != 2:
+            continue
+        match = None
+        if parts[1].startswith("[x27, #0x1e0]"):
+            match = ("x27", 0x1E0)
+        elif parts[1].startswith("[x26, #0x1e8]"):
+            match = ("x26", 0x1E8)
+        if match is None:
+            continue
+        page = _recent_adrp_page(bootstrap, index, match[0])
+        if page is None or registry_state is None:
+            continue
+        target = (page + match[1]) & UINT64_MASK
+        if target == registry_state:
+            table_store = item
+        elif target == registry_state + 8:
+            count_store = item
+
+    direct_route_complete = all(
+        item is not None
+        for item in (
+            command_compare,
+            payload_pointer_load,
+            payload_pair_load,
+            direct_authorization,
+            wrapper_tail,
+        )
+    )
+    registry_complete = all(
+        value is not None
+        for value in (
+            registry_state,
+            entry_stride_shift,
+            root_mask,
+            valid_bit_guard,
+            state_guard,
+            authorization_guard,
+            default_tcr_size,
+            low_level_call,
+            maximum_contexts,
+            table_store,
+            count_store,
+        )
+    )
+    low_level_complete = all(
+        item is not None for item in (ttbr0_write, ttbr1_write, tcr_write)
+    )
+    wake_complete = all(
+        item is not None for item in (wake_authorization, wake_call, wake_context_id)
+    )
+    complete = (
+        direct_route_complete
+        and registry_complete
+        and low_level_complete
+        and wake_complete
+    )
+
+    return {
+        "status": (
+            "STATIC_CANDIDATE_PRODUCER_UNRESOLVED" if complete else "INCOMPLETE"
+        ),
+        "direct_command_0x20": {
+            "dispatcher": image.symbols[dispatcher_name],
+            "command_compare": command_compare["address"] if command_compare else None,
+            "payload_pointer_load": (
+                payload_pointer_load["address"] if payload_pointer_load else None
+            ),
+            "payload_fields": [
+                {"offset": 0, "size": 4, "role": "region_selector"},
+                {"offset": 4, "size": 4, "role": "context_id"},
+            ],
+            "authorization_argument": 0 if direct_authorization else None,
+            "wrapper_tail": wrapper_tail["address"] if wrapper_tail else None,
+            "complete": direct_route_complete,
+        },
+        "context_registry": {
+            "state": registry_state,
+            "table_pointer_offset": 0,
+            "count_offset": 8,
+            "static_table_pointer": (
+                read_u64_or_none(image, registry_state)
+                if registry_state is not None
+                else None
+            ),
+            "static_count": (
+                read_u64_or_none(image, registry_state + 8)
+                if registry_state is not None
+                else None
+            ),
+            "entry_stride": (
+                1 << entry_stride_shift if entry_stride_shift is not None else None
+            ),
+            "root_mask": root_mask,
+            "valid_bit": 0 if valid_bit_guard else None,
+            "maximum_contexts": maximum_contexts,
+            "context_state_offset": 0x638 if state_guard else None,
+            "state_one_authorization_bit": 0 if authorization_guard else None,
+            "default_tcr_size": default_tcr_size,
+            "root_source": "registered_table_entry",
+            "bootstrap_table_store": table_store["address"] if table_store else None,
+            "bootstrap_count_store": count_store["address"] if count_store else None,
+            "complete": registry_complete,
+        },
+        "authorized_wake_route": {
+            "address": image.symbols[wake_name],
+            "authorization_argument": 1 if wake_authorization else None,
+            "context_id_global": (
+                registry_state + 0x18
+                if registry_state is not None and wake_context_id
+                else None
+            ),
+            "wrapper_call": wake_call["address"] if wake_call else None,
+            "complete": wake_complete,
+        },
+        "low_level_switch": {
+            "address": low_level_address,
+            "ttbr0_write": ttbr0_write["address"] if ttbr0_write else None,
+            "ttbr1_write": ttbr1_write["address"] if ttbr1_write else None,
+            "tcr_write": tcr_write["address"] if tcr_write else None,
+            "complete": low_level_complete,
+        },
+        "runtime_reachability": "UNPROVEN",
+        "remaining_blockers": [
+            "No caller-controlled producer of direct GXF command 0x20 is established.",
+            "The runtime context-table pointer, selected entry, and +0x638 state must be read on device.",
+            "A controlled table-entry mutation and restoration through the MDSID write path is untested.",
+            "A deterministic, user-triggerable authorized UAT wake is not established.",
+            "Acceptance of a replacement translation root and its page-table frames is untested.",
+        ],
+    }
+
+
 def analyze_gfx_mmu_dispatch(image: MappedImage) -> dict:
     instructions = disassemble_gfx_text(image)
     return {
         "entry": analyze_gxf_entry_routes(image, instructions),
         "uppl": analyze_uppl_dispatcher(image, instructions),
         "mapping": analyze_mmu_mapping_contract(image, instructions),
+        "context_switch": analyze_gxf_context_switch_contract(image, instructions),
     }
 
 

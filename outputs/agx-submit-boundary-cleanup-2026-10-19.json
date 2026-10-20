@@ -153,6 +153,8 @@
     "base_packet_slot": "0xfffffff007e46c50",
     "base_packet_target": "0xfffffff009f4be9c",
     "base_table": "0xfffffff007e46b28",
+    "invalid_required_object_status": 9,
+    "nonempty_format_error_status": 10,
     "observed_queue_entries": [
       {
         "address": "0xfffffff007b17668",
@@ -197,8 +199,30 @@
       "0xfffffff0088032ec"
     ],
     "parser_only_alternate_route_established": false,
+    "predicted_bounded_probe_path": [
+      "selector-25 wrapper accepts 0x30 record",
+      "temporary AGXBlockFence backend is prepared",
+      "two required owned buffer IDs resolve",
+      "zero command header selects empty-record path",
+      "zero item count selects finalizer cleanup",
+      "backend is released on normal return"
+    ],
+    "predicted_bounded_probe_status": 0,
+    "record_layout": {
+      "backend_context": "+0x18",
+      "batch_sideband": "+0x20",
+      "command_header": "+0xc",
+      "optional_object_id": "+0x8",
+      "required_owned_object_ids": [
+        "+0x0",
+        "+0x4"
+      ]
+    },
+    "runtime_effective_firmware_callback_must_be_identity_checked": true,
     "submit_record_size": "0x30",
-    "submit_record_size_field": "device+0x268"
+    "submit_record_size_field": "device+0x268",
+    "zero_count_field": "+0x8",
+    "zero_count_finalizer_cleanup_without_status_error": true
   },
   "parser_only_selector25_device_test_bounded": false,
   "process_instruction_count": 197,

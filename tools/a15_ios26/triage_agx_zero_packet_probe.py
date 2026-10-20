@@ -49,6 +49,45 @@ def _pool_digest(run: list[dict], stage: str) -> int | None:
     return numbered(entry, "digest") if numbered(entry, "read") == 0 else None
 
 
+def _checkpoint(run: list[dict], stage: str) -> dict | None:
+    return next((event for event in run if event["stage"] == stage and
+                 event["status"] in {"PASS", "BLOCKED"}), None)
+
+
+def _first_blocked(run: list[dict]) -> dict | None:
+    return next((
+        {
+            "stage": event["stage"],
+            "detail": event.get("detail", ""),
+        }
+        for event in run
+        if event["status"] == "BLOCKED" and event["stage"].startswith("titan.")
+    ), None)
+
+
+def render_compact(report: dict) -> str:
+    call = report["selector25_call"]
+    queue = report["queue_observation"]
+    cleanup = report["cleanup_observation"]
+    blocked = report["first_blocked_checkpoint"]
+    blocked_text = "none" if blocked is None else (
+        f'{blocked["stage"]}: {blocked["detail"]}'
+    )
+    return "\n".join((
+        f'run: {report["run_id"]}',
+        f'verdict: {report["verdict"]}',
+        f'record_abi: 0x30 ({"ok" if report["record_contract_ok"] else "incomplete"})',
+        f'selector25: status={call["status"]} kr={call["kr"]} '
+        f'output={call["output"]} attempts={call["attempts"]}',
+        f'queue: status={queue["status_before"]}->{queue["status_after"]} '
+        f'backend={queue["backend_before"]}->{queue["backend_after"]} '
+        f'dispatch={queue["dispatch_before"]}->{queue["dispatch_after"]}',
+        f'cleanup: pool={cleanup["pool_restored"]} queue={cleanup["queue_stable"]} '
+        f'backend={cleanup["backend"]}',
+        f'first_blocked: {blocked_text}',
+    )) + "\n"
+
+
 def triage(events: list[dict], run_id: str) -> dict:
     report = route_triage(events, run_id, revision=REVISION)
     run = [event for event in events if event["run_id"] == run_id]
@@ -130,6 +169,31 @@ def triage(events: list[dict], run_id: str) -> dict:
         buffer_ok and pool_ok and queue_ok and identities_ok
     )
     report["zero_packet_observation_ok"] = zero_ok
+    call_event = _checkpoint(run, "titan.zero-packet.call")
+    call_fields = fields(call_event["detail"]) if call_event else {}
+    report["run_id"] = run_id
+    report["record_contract_ok"] = record_ok
+    report["selector25_call"] = {
+        "status": call_event["status"] if call_event else "MISSING",
+        "kr": call_fields.get("kr", "missing"),
+        "output_count": call_fields.get("output-count", "missing"),
+        "output": call_fields.get("output", "missing"),
+        "attempts": call_start_count,
+    }
+    report["queue_observation"] = {
+        "status_before": queue_before.get("status", "missing"),
+        "status_after": queue_after.get("status", "missing"),
+        "backend_before": queue_before.get("backend", "missing"),
+        "backend_after": queue_after.get("backend", "missing"),
+        "dispatch_before": queue_before.get("dispatch", "missing"),
+        "dispatch_after": queue_after.get("dispatch", "missing"),
+    }
+    report["cleanup_observation"] = {
+        "pool_restored": cleanup.get("pool-restored", "missing"),
+        "queue_stable": cleanup.get("queue-post", "missing"),
+        "backend": cleanup.get("backend", "missing"),
+    }
+    report["first_blocked_checkpoint"] = _first_blocked(run)
     report["pool_digest"] = f"{before:#x}" if zero_ok else None
     report["selector25_attempts"] = 1 if zero_ok else None
     if report["verdict"] == "agx_packet_route_identity_observed":
@@ -147,12 +211,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("jsonl", type=Path)
     parser.add_argument("--run-id", help="Select a run; default is the last run in file order")
+    parser.add_argument("--compact", action="store_true",
+                        help="Print only the decisive selector-25 checkpoints")
     args = parser.parse_args()
     raw = args.jsonl.read_bytes()
     events = load_events(raw)
     report = triage(events, args.run_id or events[-1]["run_id"])
     report["source_sha256"] = hashlib.sha256(raw).hexdigest()
-    print(json.dumps(report, indent=2, sort_keys=True))
+    if args.compact:
+        print(render_compact(report), end="")
+    else:
+        print(json.dumps(report, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

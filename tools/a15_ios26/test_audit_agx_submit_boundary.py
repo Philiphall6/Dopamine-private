@@ -49,6 +49,8 @@ from audit_agx_submit_boundary import (
     EXPECTED_KERNEL_TARGET,
     EXPECTED_METACLASS_CHAIN,
     EXPECTED_EMPTY_PACKET_PATH,
+    EXPECTED_MDSID_COMMAND_ROUTE,
+    EXPECTED_NONEMPTY_PACKET_CONTROL,
     EXPECTED_SUBMIT_RECORD_CONTRACT,
     EXPECTED_OLD_SELECTOR_0,
     EXPECTED_PACKET_OVERRIDE,
@@ -75,6 +77,12 @@ from audit_agx_submit_boundary import (
     QUEUE_PACKET_BASE_GOT,
     QUEUE_PACKET_BASE_GOT_ENCODING,
     QUEUE_PACKET_BASE_SLOT,
+    QUEUE_CHUNK_PARSER,
+    QUEUE_CHUNK_PARSER_ENCODING,
+    QUEUE_CHUNK_PARSER_SLOT,
+    QUEUE_KERNEL_COMMAND,
+    QUEUE_KERNEL_COMMAND_ENCODING,
+    QUEUE_KERNEL_COMMAND_SLOT,
     QUEUE_PACKET_ENCODING,
     QUEUE_PACKET_SLOT,
     QUEUE_EMPTY_FINALIZER,
@@ -106,6 +114,7 @@ from audit_agx_submit_boundary import (
     verify_command_buffer_callback,
     verify_firmware_callback_candidate,
     verify_live_queue_link,
+    verify_nonempty_mdsid_route,
     verify_queue_packet_route,
 )
 from audit_agx_uat_dispatch import IOGPU_SELECTOR_0_ENTRIES
@@ -260,6 +269,47 @@ class SubmitBoundaryTests(unittest.TestCase):
         self.assertEqual(result["all_zero_header_finalizer_target"],
                          f"{QUEUE_EMPTY_FINALIZER:#x}")
         self.assertEqual(result["submit_record_size"], "0x30")
+        self.assertEqual(result["record_layout"]["required_owned_object_ids"],
+                         ["+0x0", "+0x4"])
+        self.assertEqual(result["invalid_required_object_status"], 9)
+        self.assertTrue(result["zero_count_finalizer_cleanup_without_status_error"])
+        self.assertEqual(result["predicted_bounded_probe_status"], 0)
+        self.assertEqual(len(result["predicted_bounded_probe_path"]), 6)
+
+    def test_nonempty_control_buffer_routes_0x10002_to_mdsid_handler(self):
+        agx_slots = {
+            QUEUE_CHUNK_PARSER_SLOT: QUEUE_CHUNK_PARSER_ENCODING,
+            QUEUE_KERNEL_COMMAND_SLOT: QUEUE_KERNEL_COMMAND_ENCODING,
+        }
+        agx = SimpleNamespace(
+            read_u64=agx_slots.get,
+            instruction_at=lambda address: instruction(
+                address, *EXPECTED_MDSID_COMMAND_ROUTE[address]
+            ),
+        )
+        iogpu = SimpleNamespace(
+            instruction_at=lambda address: instruction(
+                address, *EXPECTED_NONEMPTY_PACKET_CONTROL[address]
+            ),
+        )
+        result = verify_nonempty_mdsid_route(agx, iogpu)
+        self.assertEqual(result["vtable_entries"][0]["decoded_static_target"],
+                         f"{QUEUE_CHUNK_PARSER:#x}")
+        self.assertEqual(result["kernel_command_target"],
+                         f"{QUEUE_KERNEL_COMMAND:#x}")
+        self.assertEqual(result["kernel_command"], "0x10002")
+        self.assertEqual(result["control_buffer"]["+0xc range_header"],
+                         "0x40000001")
+        self.assertTrue(result["static_route_established"])
+        self.assertFalse(result["runtime_submission_observed"])
+
+    def test_nonempty_dispatch_slot_mutation_is_rejected(self):
+        agx = SimpleNamespace(
+            read_u64=lambda address: QUEUE_CHUNK_PARSER_ENCODING
+            if address == QUEUE_CHUNK_PARSER_SLOT else QUEUE_KERNEL_COMMAND_ENCODING ^ 1,
+        )
+        with self.assertRaisesRegex(ValueError, "queue-kernel-command-dispatch"):
+            verify_nonempty_mdsid_route(agx, SimpleNamespace())
 
     def test_submit_record_size_mutation_is_rejected(self):
         agx_slots = {
