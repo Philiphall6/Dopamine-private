@@ -24,7 +24,7 @@ flowchart TD
     A[ClearSword kernel read/write<br/>RUNTIME PASS]
     B[Reversible app-owned page alias write<br/>RUNTIME PASS]
     C[Owned AGX client, shared buffer and queue<br/>RUNTIME PASS]
-    D[Selector 25 exact 0x30 record ABI<br/>STATIC PASS / IPA READY]
+    D[Selector 25 G14P 0x40 record ABI<br/>STATIC PASS / SOURCE READY]
     E[MDSID packet and low-VA GXF TTBR0 route<br/>STATIC PASS]
     F[BEE7 active-root discovery<br/>STATIC PASS]
     G[16 KiB cloned-root format<br/>STATIC PASS]
@@ -55,13 +55,13 @@ flowchart TD
 
 ### Current deployment gate
 
-The only justified device build is the bounded
-`self-page-write-v1+agx-zero-packet-abi-v2+rtkit-mmio-disabled-v1` probe. It
-submits one exact selector-25 record of `0x30` bytes, records pre/post state,
+The only justified next device build is the bounded
+`self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1` probe. It
+submits at most one selector-25 record of `0x40` bytes, records pre/post state,
 and stops. It does not install a replacement root, force a power transition,
 perform GPU MMIO, write physical memory, or modify protected memory.
 
-Verified private build:
+Last device-tested private build (retired):
 
 | Field | Value |
 | --- | --- |
@@ -73,7 +73,14 @@ Verified private build:
 | Probe marker | `titan.zero-packet.record-contract` |
 | Compiled ABI evidence | `device+0x268`, compare/record size `0x30`, selector `0x19` |
 | Call boundary | Exactly one `_IOConnectCallMethod` call in `_titan_probe_zero_packet_once` |
-| Device state | Ready for one bounded run; not yet accepted on device |
+| Device result | Stable `device+0x268=0x40/0x40`; stopped before `_IOConnectCallMethod` |
+
+The v2 run completed without a restart. Its static `0x30` expectation was the
+IOGPU base-class default, not the active G14P contract. Exact AGXG14P code at
+`0xfffffff0087e7344..0xfffffff0087e7350` overwrites `device+0x268` with
+`0x40` and then writes the independently observed queue-input size `0x410` to
+`device+0x278`. ABI v3 uses this joined static/runtime evidence and retains
+the one-call limit.
 
 The build is not a jailbreak release. Sileo and bootstrap deployment remain
 blocked behind selector-25 acceptance, power-lifecycle survival, reversible
@@ -98,6 +105,7 @@ Deployment order:
 - Blocker schema: [`docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md`](docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md)
 - Detailed worklog: [`docs/A15_IOS26_WORKLOG.md`](docs/A15_IOS26_WORKLOG.md)
 - Verified private build: [`docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md)
+- Current G14P ABI: [`docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md`](docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md)
 - Power lifecycle audit: [`tools/a15_ios26/audit_agx_firmware_power_lifecycle.py`](tools/a15_ios26/audit_agx_firmware_power_lifecycle.py)
 
 Keep this section synchronized whenever a stage changes state or a new IPA is

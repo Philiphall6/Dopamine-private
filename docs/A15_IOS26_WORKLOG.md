@@ -1696,3 +1696,23 @@ write was performed. The next device evidence remains one corrected selector-25
 `0x30` record with cleanup observation; a power-cycle probe is not combined
 with it.
 
+### 2026-10-20: ABI v2 stopped safely and exposed the G14P 0x40 override
+
+The private ABI v2 IPA ran once on iPhone14,2/23A355 without a restart. All
+identity and preflight gates passed through stable firmware-pool and queue
+snapshots. Two kernel reads then returned `device+0x268=0x40/0x40`; the v2
+`0x30` guard blocked before `IOConnectCallMethod`, so selector 25 was not
+invoked and no post-call side effects existed to clean up.
+
+An exact-image rescan found the missing subclass write. IOGPU initializes the
+base field to `0x30`, but the G14P initializer at
+`0xfffffff0087e7344..0xfffffff0087e7350` overwrites `+0x268` with `0x40` and
+immediately writes `0x410` to `+0x278`. The latter matches the independently
+observed queue-input contract on the same live object. The selector-25 wrapper
+reads the queue device back-reference and compares scalar input 3 against this
+live field, so `0x40` is now supported by both runtime and static evidence.
+
+ABI v3 changes only the bounded record size to `0x40`, updates the revision
+markers and retains the one-call, no-retry, no-MMIO, no-physical-write and
+no-protected-write gates. V2 is retired and must not be run again.
+

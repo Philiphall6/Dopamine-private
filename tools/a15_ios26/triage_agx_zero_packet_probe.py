@@ -13,7 +13,8 @@ from triage_agx_owned_queue_probe import detail
 from triage_agx_packet_route_identity_probe import triage as route_triage
 
 
-REVISION = "self-page-write-v1+agx-zero-packet-abi-v2+rtkit-mmio-disabled-v1"
+REVISION = "self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1"
+RECORD_SIZE = 0x40
 REQUIRED = (
     ("titan.zero-packet", "START"),
     ("titan.zero-packet.command-buffer", "PASS"),
@@ -76,7 +77,7 @@ def render_compact(report: dict) -> str:
     return "\n".join((
         f'run: {report["run_id"]}',
         f'verdict: {report["verdict"]}',
-        f'record_abi: 0x30 ({"ok" if report["record_contract_ok"] else "incomplete"})',
+        f'record_abi: {RECORD_SIZE:#x} ({"ok" if report["record_contract_ok"] else "incomplete"})',
         f'selector25: status={call["status"]} kr={call["kr"]} '
         f'output={call["output"]} attempts={call["attempts"]}',
         f'queue: status={queue["status_before"]}->{queue["status_after"]} '
@@ -114,10 +115,10 @@ def triage(events: list[dict], run_id: str) -> dict:
 
     record_contract = fields(detail(run, "titan.zero-packet.record-contract"))
     record_ok = bool(
-        numbered(detail(run, "titan.zero-packet.record-size"), "value") == 0x30 and
-        numbered(detail(run, "titan.zero-packet.record-size-repeat"), "value") == 0x30 and
-        record_contract.get("device+0x268") == "0x30/0x30" and
-        numbered(detail(run, "titan.zero-packet.record-contract"), "expected") == 0x30
+        numbered(detail(run, "titan.zero-packet.record-size"), "value") == RECORD_SIZE and
+        numbered(detail(run, "titan.zero-packet.record-size-repeat"), "value") == RECORD_SIZE and
+        record_contract.get("device+0x268") == "0x40/0x40" and
+        numbered(detail(run, "titan.zero-packet.record-contract"), "expected") == RECORD_SIZE
     )
 
     preflight = fields(detail(run, "titan.zero-packet.buffer-preflight"))

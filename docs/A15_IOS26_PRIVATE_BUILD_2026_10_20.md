@@ -33,8 +33,11 @@ probe function.
 
 ## Promotion decision
 
-The IPA is promoted only to **ready for one bounded device observation**. It
-is not a working jailbreak. The next runtime gate is acceptance of the exact
-selector-25 record with stable cleanup state. Power-lifecycle survival,
+The IPA was promoted only to **one bounded device observation**. It is not a
+working jailbreak. The run completed without a restart and stopped before the
+call because the live G14P object reported `device+0x268=0x40/0x40`, while v2
+expected the base-class default `0x30`. No selector-25 call was made. This v2
+artifact is retired; ABI v3 uses the statically and dynamically joined G14P
+size `0x40`. Power-lifecycle survival,
 reversible root replacement, physical writes, SPTM/PAPT policy work,
 bootstrap and Sileo all remain disabled or blocked.

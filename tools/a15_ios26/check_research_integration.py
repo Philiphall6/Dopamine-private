@@ -65,7 +65,7 @@ def main() -> int:
     with (ROOT / "Application/Dopamine/Info.plist").open("rb") as stream:
         app_info = plistlib.load(stream)
     require(app_info.get("A15ProbeRevision") ==
-            "self-page-write-v1+agx-zero-packet-abi-v2+rtkit-mmio-disabled-v1",
+            "self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1",
             "app Info.plist does not identify the MMIO-disabled revision")
     require(app_info.get("A15ProbeSafetyMode") == "no-gfx-mmio",
             "app Info.plist does not expose the MMIO safety mode")
@@ -504,7 +504,7 @@ def main() -> int:
     ):
         require(marker in ipc_port, f"bounded IPC census is missing marker: {marker}")
     require(
-        "revision=self-page-write-v1+agx-zero-packet-abi-v2+rtkit-mmio-disabled-v1" in jailbreaker,
+        "revision=self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1" in jailbreaker,
         "active probe entry does not identify the MMIO-disabled build",
     )
     queue_probe_start = titan.find('titan_checkpoint(@"titan.self-gpu.queue-selector", @"START"')
@@ -683,6 +683,8 @@ def main() -> int:
             packet_route_body.find('titan.packet-route-identity.stability') <
             packet_route_body.find('titan.packet-route-identity", @"PASS"'),
             "packet route identity gates are missing or out of order")
+    require("kIOS2601AGXSubmitRecordSize = 0x40" in titan,
+            "zero-packet observation does not use the live G14P 0x40 ABI")
     for marker in (
         'titan.zero-packet.buffer-preflight',
         'titan.zero-packet.pool-before-repeat',

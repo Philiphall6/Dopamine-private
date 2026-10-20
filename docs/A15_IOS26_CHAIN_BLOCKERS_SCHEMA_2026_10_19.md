@@ -7,8 +7,8 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
    |
 [RUNTIME PASS] Owned AGX mapping, kernel alias and same-client queue
    |
-[STATIC PASS / DEVICE PENDING] Correct iOS 26 selector-25 ABI
-   |    selector 25, four scalars, 0x30-byte record
+[STATIC PASS / SOURCE READY] Correct G14P selector-25 ABI
+   |    selector 25, four scalars, 0x40-byte record
    |
 [STATIC PASS] MDSID packet route and low-VA GXF-TTBR0 binding
    |
@@ -35,7 +35,7 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
    |    Firmware must accept owned DRAM as the registered root frame
    |
 [BLOCKER 3] Corrected selector-25/MDSID runtime transport
-   |    Previous 0x38 record was rejected with 0xe00002c2; 0x30 is untested
+   |    0x38 was rejected; v2 stopped before call on live 0x40 contract
    |
 [BLOCKER 4] Safe rollback
    |    Restore registry entry, trigger command 3 again, verify live TTBR0
@@ -72,5 +72,5 @@ This is now a coherent static physical-write candidate, not a working
 jailbreak. The direct G14P RTBuddy-to-firmware lifecycle is pinned and does not
 touch the user-client queue registry in its direct path, but runtime survival
 is not yet observed. The next useful IPA is exactly one corrected selector-25
-`0x30` contract probe. A power-transition observation comes only after that
+G14P `0x40` contract probe. A power-transition observation comes only after that
 call is accepted; root replacement and protected writes remain disabled.

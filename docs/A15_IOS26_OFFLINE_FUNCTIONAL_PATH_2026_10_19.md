@@ -13,7 +13,7 @@ but the effect has not yet been exercised safely on the device.
   -> [RUNTIME PASS] reversible kernel-alias write to an app-owned page
   -> [RUNTIME PASS] owned AGX client, shared buffer and same-client queue
   -> [STATIC PASS / SOURCE ADAPTED / DEVICE PENDING]
-       selector-25 iOS 26 ABI: selector 25, four scalars, record size 0x30
+       selector-25 G14P ABI: selector 25, four scalars, record size 0x40
   -> [STATIC PASS] MDSID packet 0x0e reaches the firmware handler
   -> [STATIC PASS] low target VA resolves through active GXF TTBR0
   -> [STATIC PASS] BEE7 exposes the active root fields read-only
@@ -73,7 +73,7 @@ context survival still require one bounded runtime observation.
 |---|---|---|
 | Kernel foothold | RUNTIME PASS | None for this stage |
 | AGX object identity and owned queue | RUNTIME PASS | Packet consumption remains separate |
-| Selector-25 ABI | STATIC PASS / DEVICE PENDING | One accepted `0x30` record and cleanup observation |
+| Selector-25 ABI | STATIC PASS / DEVICE PENDING | One accepted `0x40` record and cleanup observation |
 | MDSID-to-GXF-TTBR0 binding | STATIC PASS | Runtime packet transport and an owned target readback |
 | Active-root discovery through BEE7 | STATIC PASS / RUNTIME PENDING | Confirm both returned roots on-device without mutation |
 | RTBuddy class-`0xb` producer | STATIC PASS | Deterministic app-visible transition and lifecycle |
@@ -103,7 +103,7 @@ context survival still require one bounded runtime observation.
    the registered-root TTBR0 reload.
 4. DONE: pin the G14P RTBuddy transition wrapper, gated state change and exact
    live firmware-vtable slots without invoking them.
-5. NEXT: build and run exactly one corrected selector-25 `0x30` record probe;
+5. NEXT: build and run exactly one corrected selector-25 G14P `0x40` record probe;
    it must stop after acceptance/rejection and cleanup observation.
 6. NEXT: define one normal app-side power-assertion observation with exact
    queue, buffer, context and registered-root stability checks.
@@ -116,6 +116,7 @@ protected-memory write.
 
 Machine-readable evidence:
 
+- `../../outputs/iphone-system/agx-submit-boundary-2026-10-20.json`
 - `../../outputs/iphone-system/rtb-power-command3-route-2026-10-20.json`
 - `../../outputs/iphone-system/agx-firmware-power-lifecycle-2026-10-20.json`
 - `../../outputs/iphone-system/gxf-ttbr0-wake-route-2026-10-19.json`

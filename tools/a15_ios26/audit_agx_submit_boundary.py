@@ -355,6 +355,12 @@ EXPECTED_SUBMIT_RECORD_CONTRACT = {
     0xfffffff009f1ae54: ("cmp", "x24, x8"),
     0xfffffff009f1ae58: ("b.ne", "#0xfffffff009f1af44"),
 }
+EXPECTED_G14P_SUBMIT_RECORD_OVERRIDE = {
+    0xfffffff0087e7344: ("mov", "w8, #0x40"),
+    0xfffffff0087e7348: ("str", "w8, [x19, #0x268]"),
+    0xfffffff0087e734c: ("mov", "w8, #0x410"),
+    0xfffffff0087e7350: ("str", "w8, [x19, #0x278]"),
+}
 EXPECTED_NONEMPTY_PACKET_CONTROL = {
     0xfffffff009f4c178: ("ldr", "w8, [x24, #0xc]"),
     0xfffffff009f4c188: ("tst", "w8, #0x40000000"),
@@ -726,6 +732,7 @@ def verify_queue_packet_route(agx: MachOImage, iogpu: MachOImage) -> dict:
     ):
         raise ValueError("queue packet base-method pointer chain changed")
     verify_instructions(agx, EXPECTED_PACKET_OVERRIDE)
+    verify_instructions(agx, EXPECTED_G14P_SUBMIT_RECORD_OVERRIDE)
     verify_instructions(iogpu, EXPECTED_EMPTY_PACKET_PATH)
     verify_instructions(iogpu, EXPECTED_SUBMIT_RECORD_CONTRACT)
     verify_instructions(iogpu, EXPECTED_OLD_SELECTOR_0)
@@ -763,7 +770,7 @@ def verify_queue_packet_route(agx: MachOImage, iogpu: MachOImage) -> dict:
         "nonempty_format_error_status": 10,
         "predicted_bounded_probe_status": 0,
         "predicted_bounded_probe_path": [
-            "selector-25 wrapper accepts 0x30 record",
+            "selector-25 wrapper accepts the live G14P 0x40 record",
             "temporary AGXBlockFence backend is prepared",
             "two required owned buffer IDs resolve",
             "zero command header selects empty-record path",
@@ -771,8 +778,12 @@ def verify_queue_packet_route(agx: MachOImage, iogpu: MachOImage) -> dict:
             "backend is released on normal return",
         ],
         "runtime_effective_firmware_callback_must_be_identity_checked": True,
-        "submit_record_size": "0x30",
+        "base_submit_record_size": "0x30",
+        "g14p_submit_record_override": "0x40",
+        "submit_record_size": "0x40",
         "submit_record_size_field": "device+0x268",
+        "queue_input_size_field": "device+0x278",
+        "g14p_queue_input_size": "0x410",
     }
 
 
@@ -788,7 +799,7 @@ def verify_nonempty_mdsid_route(agx: MachOImage, iogpu: MachOImage) -> dict:
     return {
         "vtable_entries": entries,
         "submit_record": {
-            "size": "0x30",
+            "size": "0x40",
             "primary_buffer_id": "+0x0",
             "control_buffer_id": "+0x4",
             "optional_buffer_id": "+0x8 (zero)",

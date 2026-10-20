@@ -46,6 +46,7 @@ from audit_agx_submit_boundary import (
     EXPECTED_COMMAND_BUFFER,
     EXPECTED_BLOCK_FENCE_FREE,
     EXPECTED_FIRMWARE_FACTORY,
+    EXPECTED_G14P_SUBMIT_RECORD_OVERRIDE,
     EXPECTED_KERNEL_TARGET,
     EXPECTED_METACLASS_CHAIN,
     EXPECTED_EMPTY_PACKET_PATH,
@@ -254,7 +255,10 @@ class SubmitBoundaryTests(unittest.TestCase):
                             in IOGPU_SELECTOR_0_ENTRIES})
         agx = SimpleNamespace(
             read_u64=agx_slots.get,
-            instruction_at=lambda address: instruction(address, *EXPECTED_PACKET_OVERRIDE[address]),
+            instruction_at=lambda address: instruction(
+                address,
+                *(EXPECTED_PACKET_OVERRIDE | EXPECTED_G14P_SUBMIT_RECORD_OVERRIDE)[address],
+            ),
         )
         iogpu = SimpleNamespace(
             read_u64=iogpu_slots.get,
@@ -268,7 +272,9 @@ class SubmitBoundaryTests(unittest.TestCase):
         self.assertTrue(result["all_zero_header_command_dispatch_skipped"])
         self.assertEqual(result["all_zero_header_finalizer_target"],
                          f"{QUEUE_EMPTY_FINALIZER:#x}")
-        self.assertEqual(result["submit_record_size"], "0x30")
+        self.assertEqual(result["base_submit_record_size"], "0x30")
+        self.assertEqual(result["g14p_submit_record_override"], "0x40")
+        self.assertEqual(result["submit_record_size"], "0x40")
         self.assertEqual(result["record_layout"]["required_owned_object_ids"],
                          ["+0x0", "+0x4"])
         self.assertEqual(result["invalid_required_object_status"], 9)
@@ -323,7 +329,10 @@ class SubmitBoundaryTests(unittest.TestCase):
                             in IOGPU_SELECTOR_0_ENTRIES})
         agx = SimpleNamespace(
             read_u64=agx_slots.get,
-            instruction_at=lambda address: instruction(address, *EXPECTED_PACKET_OVERRIDE[address]),
+            instruction_at=lambda address: instruction(
+                address,
+                *(EXPECTED_PACKET_OVERRIDE | EXPECTED_G14P_SUBMIT_RECORD_OVERRIDE)[address],
+            ),
         )
         expected = (EXPECTED_EMPTY_PACKET_PATH | EXPECTED_SUBMIT_RECORD_CONTRACT |
                     EXPECTED_OLD_SELECTOR_0)
@@ -332,6 +341,35 @@ class SubmitBoundaryTests(unittest.TestCase):
             instruction_at=lambda address: instruction(
                 address, "mov", "w8, #0x38") if address == 0xfffffff009f43aa4
                 else instruction(address, *expected[address]),
+        )
+        with self.assertRaisesRegex(ValueError, "instruction mismatch"):
+            verify_queue_packet_route(agx, iogpu)
+
+    def test_g14p_submit_record_override_mutation_is_rejected(self):
+        agx_slots = {
+            QUEUE_PACKET_SLOT: QUEUE_PACKET_ENCODING,
+            QUEUE_PRECHECK_SLOT: QUEUE_PRECHECK_ENCODING,
+            QUEUE_EMPTY_FINALIZER_SLOT: QUEUE_EMPTY_FINALIZER_ENCODING,
+            QUEUE_PACKET_BASE_GOT: QUEUE_PACKET_BASE_GOT_ENCODING,
+        }
+        iogpu_slots = {QUEUE_PACKET_BASE_SLOT: QUEUE_PACKET_BASE_ENCODING}
+        iogpu_slots.update({address: encoding for _, address, encoding, _
+                            in IOGPU_SELECTOR_0_ENTRIES})
+        agx_expected = EXPECTED_PACKET_OVERRIDE | EXPECTED_G14P_SUBMIT_RECORD_OVERRIDE
+        agx = SimpleNamespace(
+            read_u64=agx_slots.get,
+            instruction_at=lambda address: instruction(
+                address, "mov", "w8, #0x30")
+                if address == 0xfffffff0087e7344
+                else instruction(address, *agx_expected[address]),
+        )
+        iogpu_expected = (EXPECTED_EMPTY_PACKET_PATH |
+                          EXPECTED_SUBMIT_RECORD_CONTRACT |
+                          EXPECTED_OLD_SELECTOR_0)
+        iogpu = SimpleNamespace(
+            read_u64=iogpu_slots.get,
+            instruction_at=lambda address: instruction(
+                address, *iogpu_expected[address]),
         )
         with self.assertRaisesRegex(ValueError, "instruction mismatch"):
             verify_queue_packet_route(agx, iogpu)

@@ -50,3 +50,24 @@ temporary backend, and an unchanged zeroed buffer.
 This revision tests only whether the corrected record reaches and exits the
 empty-record batch path cleanly. Success does not establish a physical-write
 primitive or SPTM authority.
+
+## Device result on 2026-10-20
+
+The v2 run completed without a restart and stopped before selector 25. Two
+kernel reads returned `device+0x268=0x40/0x40`, so the `0x30` guard correctly
+blocked the call. The firmware pool, queue, command buffer and owned buffer
+preflight were stable, and `_IOConnectCallMethod` was not invoked.
+
+The earlier static conclusion was incomplete. The IOGPU base initializer does
+store `0x30`, but the exact AGXG14P initializer later executes:
+
+```text
+0xfffffff0087e7344  mov w8, #0x40
+0xfffffff0087e7348  str w8, [x19, #0x268]
+0xfffffff0087e734c  mov w8, #0x410
+0xfffffff0087e7350  str w8, [x19, #0x278]
+```
+
+The adjacent `0x410` value matches the queue-input size independently observed
+on the same live device object. V2 is therefore retired. ABI v3 uses the live
+G14P size `0x40` while preserving all one-call and cleanup gates.

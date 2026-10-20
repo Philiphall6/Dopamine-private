@@ -164,11 +164,11 @@ def audit(kernelcache: Path) -> dict:
             {
                 "id": "SELECTOR25_CORRECTED_ABI",
                 "status": "DEVICE_PENDING",
-                "question": "Does the exact 0x30 submit record pass the external-method contract?",
+                "question": "Does the exact G14P 0x40 submit record pass the external-method contract?",
             },
         ],
         "decision": (
-            "Build and run the corrected 0x30 selector-25 probe before adding a power-cycle probe. "
+            "Build and run the corrected G14P 0x40 selector-25 probe before adding a power-cycle probe. "
             "If selector 25 is accepted, the next bounded stage should observe one normal power "
             "transition while checking queue, buffer, context, and registered-root stability."
         ),
