@@ -85,7 +85,7 @@ class TestAGXLifecycleV2Source(unittest.TestCase):
 
     def test_cleanup_is_centralized_and_guarded(self):
         self.assertEqual(
-            SOURCE.count("titan_cleanup_shared_alias_resources(&resources, result, &lifecycle);"),
+            SOURCE.count("titan_cleanup_shared_alias_resources(&resources, result,"),
             1,
         )
         self.assertIn("if (resources->cleanupDone)", SOURCE)

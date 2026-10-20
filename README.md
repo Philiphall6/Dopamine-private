@@ -163,6 +163,15 @@ iOS 16.1, so the workflow now downloads and selects the iPhoneOS 16.5 SDK
 explicitly for the next verification run. This remains a compile-only check;
 it does not produce an IPA, install anything, or validate a jailbreak.
 
+The AGX shared-buffer tracking V6 is documented in
+[`docs/A15_IOS26_AGX_BUFFER_TRACKING_V6_2026_10_20.md`](docs/A15_IOS26_AGX_BUFFER_TRACKING_V6_2026_10_20.md).
+It adds read-only SHA-256 and transition snapshots around the existing buffer
+initialization, temporary alias mutation, queue, notification and bind
+checkpoints. The raw user address is replaced by a short token, and the
+existing one-call empty-record boundary is unchanged. V6 is `STATIC PASS` and
+offline-tested only; it does not add a new GPU operation or claim a device
+run.
+
 ### Experimental A15 UI diagnostic
 
 On the exact `iPhone14,2` / A15 / iOS 26.0.1 build `23A355`, the main screen

@@ -2039,3 +2039,25 @@ The UI and source-contract checks pass offline. No Objective-C compilation or
 device execution was performed in this revision, so device behavior and
 functional jailbreak status remain `NOT_TESTED`.
 
+### 2026-10-20: AGX shared-buffer tracking V6 (offline)
+
+Added passive snapshots to `titan.m` for the existing 16 KiB shared AGX
+buffer. The tracker records a SHA-256 digest, nonzero count, first nonzero
+offset, changed-byte count, first changed offset and a tokenized address at
+buffer creation, initialization, alias observation, queue creation,
+notification creation, notification binding and final preflight. Cleanup now
+records `ALIAS_AFTER_RESTORE`, or `NOT_TESTED` when the temporary write was
+not reached. No new IOKit call, selector, GPU command, MMIO, physical write,
+protected write, SPTM/PAPT change or bootstrap was added.
+
+The previous `first-nonzero=0x100` is explained by the intentional temporary
+write at `output.address + 0x100`; V6 is designed to detect any later change
+without claiming causality. The supplied in-app `A15DIAG` log confirms that
+the normal-path diagnostic is active and ends `BLOCKED` at the missing runtime
+kernel primitive, with privilege and bootstrap stages `NOT_TESTED`.
+
+Offline verification passed: the research integration check, 20 focused V6/V2
+tests and `git diff --check`. Objective-C compilation and V6 execution on the
+iPhone remain `NOT_TESTED` in this revision. Details are in
+`docs/A15_IOS26_AGX_BUFFER_TRACKING_V6_2026_10_20.md`.
+

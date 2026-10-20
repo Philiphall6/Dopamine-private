@@ -810,7 +810,7 @@ def main() -> int:
         'titan.own-queue.firmware-read',
         'if (titan_probe_backend_identity(device) != 0)',
         'if (titan_probe_packet_route_identity(queue, device, firmware, rawVtable) != 0)',
-        'if (titan_probe_notification_binding(connection, table, queue, output.id, lifecycle) != 0)',
+        'if (titan_probe_notification_binding(connection, table, queue, output.id,',
         'if (titan_probe_zero_packet_once(connection, queue, device, firmware,',
     ):
         require(marker in titan, f"owned queue probe is missing: {marker}")
@@ -833,7 +833,7 @@ def main() -> int:
             owned_queue_body.find('titan.own-queue.firmware-read", @"PASS"') <
             owned_queue_body.find('if (titan_probe_backend_identity(device) != 0)') <
             owned_queue_body.find('if (titan_probe_packet_route_identity(queue, device, firmware, rawVtable) != 0)') <
-            owned_queue_body.find('if (titan_probe_notification_binding(connection, table, queue, output.id, lifecycle) != 0)') <
+            owned_queue_body.find('if (titan_probe_notification_binding(connection, table, queue, output.id,') <
             owned_queue_body.find('if (titan_probe_zero_packet_once(connection, queue, device, firmware,') <
             owned_queue_body.find('titan.own-queue", @"PASS"'),
             "firmware and backend identity reads must follow same-client gate and precede bounded stop")
@@ -854,7 +854,11 @@ def main() -> int:
         'mlock((void *)(uintptr_t)output.address, 0x4000)',
         'titan_read_exact_window(alias, observed, sizeof(observed)',
         'memcpy(userBytes, changed, sizeof(changed));',
-        'titan_cleanup_shared_alias_resources(&resources, result, &lifecycle);',
+        'titan_cleanup_shared_alias_resources(&resources, result,',
+        '@"BUFFER_CREATED"',
+        '@"BUFFER_INITIALIZED"',
+        '@"ALIAS_BEFORE"',
+        '@"ALIAS_AFTER_WRITE"',
     ):
         require(marker in shared_body, f"shared alias probe is missing: {marker}")
     for marker in (
@@ -875,17 +879,55 @@ def main() -> int:
             shared_body.find('titan.shared-alias.registry') <
             shared_body.find('memcpy(userBytes, changed, sizeof(changed));') <
             shared_body.find('if (result == 0) result = titan_probe_owned_agx_queue(') <
-            shared_body.find('titan_cleanup_shared_alias_resources(&resources, result, &lifecycle);'),
+            shared_body.find('titan_cleanup_shared_alias_resources(&resources, result,'),
             "shared alias probe gates are missing or out of order")
     cleanup_start = titan.find('static int titan_cleanup_shared_alias_resources(')
     cleanup_end = titan.find('static int titan_probe_shared_alias(void)', cleanup_start)
     cleanup_body = titan[cleanup_start:cleanup_end]
     require(0 <= cleanup_body.find('titan.shared-alias.restore') <
+            cleanup_body.find('@"ALIAS_AFTER_RESTORE"') <
             cleanup_body.find('titan.shared-alias.redirect') <
             cleanup_body.find('munlock(') <
             cleanup_body.find('IOServiceClose(resources->connection)') <
             cleanup_body.find('IOObjectRelease(resources->service)'),
             "shared alias cleanup order must restore, unlock, close and release")
+    for marker in (
+        'kIOS2601AGXSharedBufferSize = 0x4000',
+        'CommonCrypto/CommonDigest.h',
+        'titan_buffer_address_token',
+        'address-token=',
+        'sha256=',
+        'nonzero-count=',
+        'first-nonzero=',
+        'changed-bytes=',
+        'first-changed=',
+        'read-only=yes',
+        '@"NOTIFICATION_BEFORE"',
+        '@"NOTIFICATION_AFTER"',
+        '@"BIND_BEFORE"',
+        '@"BIND_AFTER"',
+        '@"QUEUE_AFTER"',
+        '@"PREFLIGHT_FINAL"',
+        'temporary-alias-write-not-reached',
+    ):
+        require(marker in titan, f"AGX shared-buffer V6 tracking is missing: {marker}")
+    require(shared_body.find('@"BUFFER_CREATED"') <
+            shared_body.find('@"BUFFER_INITIALIZED"') <
+            shared_body.find('@"ALIAS_BEFORE"') <
+            shared_body.find('@"ALIAS_AFTER_WRITE"'),
+            "shared-buffer creation and alias snapshots are out of order")
+    require(notification_binding_body.find('@"NOTIFICATION_BEFORE"') <
+            notification_binding_body.find('@"NOTIFICATION_AFTER"') <
+            notification_binding_body.find('@"BIND_BEFORE"') <
+            notification_binding_body.find('@"BIND_AFTER"'),
+            "notification buffer snapshots are out of order")
+    require(owned_queue_body.find('@"QUEUE_BEFORE"') <
+            owned_queue_body.find('@"QUEUE_AFTER"') <
+            owned_queue_body.find('if (titan_probe_notification_binding('),
+            "queue buffer snapshots are out of order")
+    require(zero_packet_body.find('@"PREFLIGHT_FINAL"') <
+            zero_packet_body.find('titan.zero-packet.buffer-preflight'),
+            "final buffer snapshot must precede zero preflight")
     for marker in (
         "kIOS2601AGXUATMode = 0xfffffff00ab61150ULL",
         "kIOS2601AGXUATModeSourceOffset = 0xdb08ULL",
