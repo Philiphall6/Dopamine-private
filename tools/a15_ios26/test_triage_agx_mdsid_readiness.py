@@ -2,6 +2,9 @@ import unittest
 
 from test_triage_agx_notification_bound_probe import complete_run
 from triage_agx_mdsid_readiness import (
+    BUILD,
+    GFX_SHA256,
+    KERNELCACHE_SHA256,
     STATIC_ROUTE_STATUS,
     assess,
     render_compact,
@@ -12,7 +15,9 @@ from triage_agx_mdsid_readiness import (
 def static_audit(status=STATIC_ROUTE_STATUS):
     return {
         "status": status,
-        "build": "23A355",
+        "build": BUILD,
+        "kernelcache_sha256": KERNELCACHE_SHA256,
+        "gfx_sha256": GFX_SHA256,
         "limits": "Exact-image static analysis only.",
     }
 
@@ -35,8 +40,15 @@ class MDSIDReadinessTriageTests(unittest.TestCase):
         report = triage(complete_run(), "run-a", static_audit("UNKNOWN"))
         self.assertEqual(report["state"], "INCOMPLETE_EVIDENCE_NO_GO")
         self.assertFalse(report["device_submission_authorized"])
-        self.assertIn("exact-image static MDSID-to-GXF TTBR0 binding is absent",
+        self.assertIn("exact 23A355 MDSID-to-GXF TTBR0 static binding is absent",
                       report["missing_evidence"])
+
+    def test_wrong_exact_image_is_not_static_evidence(self):
+        audit = static_audit()
+        audit["gfx_sha256"] = "0" * 64
+        report = triage(complete_run(), "run-a", audit)
+        self.assertEqual(report["state"], "INCOMPLETE_EVIDENCE_NO_GO")
+        self.assertFalse(report["evidence"]["static_mdsid_ttbr0_binding"])
 
     def test_assessment_cannot_grant_device_submission(self):
         report = assess(

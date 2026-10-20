@@ -13,6 +13,9 @@ from triage_agx_notification_bound_probe import triage as notification_triage
 
 
 STATIC_ROUTE_STATUS = "MDSID_GXF_TTBR0_BINDING_PROVED_OFFLINE"
+BUILD = "23A355"
+KERNELCACHE_SHA256 = "8867208c59bfa426611c36fcfe570ffc41cc75ee293472fe7197860d0c5223f1"
+GFX_SHA256 = "3b245807d7a65241890e0d1d31566fed221082322de784779824a2e11464a98b"
 NO_GO_LIMITS = (
     "This report is an offline/read-only correlation gate. It never authorizes a "
     "nonempty MDSID record, GPU command, MMIO, physical or protected write, "
@@ -22,7 +25,12 @@ NO_GO_LIMITS = (
 
 def assess(runtime: dict, static_audit: dict) -> dict:
     """Return a conservative combined verdict for already-collected evidence."""
-    static_route_ok = static_audit.get("status") == STATIC_ROUTE_STATUS
+    static_route_ok = (
+        static_audit.get("status") == STATIC_ROUTE_STATUS and
+        static_audit.get("build") == BUILD and
+        static_audit.get("kernelcache_sha256") == KERNELCACHE_SHA256 and
+        static_audit.get("gfx_sha256") == GFX_SHA256
+    )
     route_identity_ok = runtime.get("packet_route_identity_ok") is True
     empty_record_ok = (
         runtime.get("verdict") ==
@@ -32,7 +40,7 @@ def assess(runtime: dict, static_audit: dict) -> dict:
 
     missing = []
     if not static_route_ok:
-        missing.append("exact-image static MDSID-to-GXF TTBR0 binding is absent")
+        missing.append("exact 23A355 MDSID-to-GXF TTBR0 static binding is absent")
     if not route_identity_ok:
         missing.append("runtime command-buffer and firmware callback identities are absent")
     if not empty_record_ok:
