@@ -1766,6 +1766,27 @@ The offline exact-image audit passes and now reports both the observed unbound
 status `0xe00002bc` and the statically predicted linked path. The complete
 Python suite has 297 passing tests, including dedicated v4 triage tests and
 integration checks that enforce exactly one selector 14, one selector 24 and
-at most one selector 25. Private CI, compiled IPA inspection and the single
-bounded phone run remain pending.
+at most one selector 25.
+
+### 2026-10-20: notification-bound v4 private artifact verified
+
+Private GitHub Actions run `39387291888` built source commit
+`ecb789d505fef44aed3088c5f0af34ffcf1ac6f9` successfully. The downloaded IPA
+has SHA-256
+`541A21AC39E652DBF4B6C7825925E1670BA8C4B86BAADA4EBCF54542E1CC9EEC` and
+embeds the exact v4 revision plus safety mode `no-gfx-mmio`.
+
+Compiled Titan inspection resolved `_titan_probe_notification_binding` at
+`0x16ebc..0x17e00`. It contains one `_IOConnectCallMethod` branch at `0x17220`
+with selector `0x0e`, one `_IOConnectCallScalarMethod` branch at `0x178f4`
+with selector `0x18`, and explicit reads of `queue+0x428/+0x430`. The separate
+`_titan_probe_zero_packet_once` range `0x17e00..0x18d04` reads
+`device+0x268`, compares it with `0x40`, creates an exact `0x40` record and
+contains one `_IOConnectCallMethod` branch at `0x18570` with selector `0x19`.
+
+This artifact is promoted only to one bounded target observation. A nonempty
+MDSID packet is deliberately excluded: the notification-bound empty record
+must first prove that selector 25 reaches and releases the backend cleanly.
+Power transitions, MMIO, physical writes, protected writes, root replacement,
+bootstrap and Sileo remain disabled.
 

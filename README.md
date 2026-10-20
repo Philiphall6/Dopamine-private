@@ -25,7 +25,7 @@ flowchart TD
     B[Reversible app-owned page alias write<br/>RUNTIME PASS]
     C[Owned AGX client, shared buffer and queue<br/>RUNTIME PASS]
     D[Selector 25 G14P 0x40 wrapper contract<br/>RUNTIME PASS]
-    E[Notification queue selectors 14 and 24<br/>STATIC PASS / SOURCE READY]
+    E[Notification queue selectors 14 and 24<br/>COMPILED PASS / DEVICE PENDING]
     P[MDSID packet and low-VA GXF TTBR0 route<br/>STATIC PASS]
     F[BEE7 active-root discovery<br/>STATIC PASS]
     G[16 KiB cloned-root format<br/>STATIC PASS]
@@ -63,9 +63,9 @@ remained unchanged. Exact-image control flow proves that this value is returned
 before backend allocation when `queue+0x428` is null. The missing prerequisite
 is therefore the normal IOGPU notification queue, not another record-size guess.
 
-The only justified next device run is the bounded
+The only justified next device run is the verified bounded
 `self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1`
-probe after private CI verification. It creates one notification queue with
+probe. It creates one notification queue with
 selector 14, binds it once with selector 24, verifies `queue+0x428` and
 `queue+0x430`, then makes at most one selector-25 call. It does not install a
 replacement root, force a power transition, perform GPU MMIO, write physical
@@ -75,14 +75,15 @@ Current private build candidate:
 
 | Field | Value |
 | --- | --- |
-| Source commit | Pending private commit |
-| GitHub Actions run | Pending |
-| IPA SHA-256 | Pending |
+| Source commit | `ecb789d505fef44aed3088c5f0af34ffcf1ac6f9` |
+| GitHub Actions run | [`39387291888`](https://github.com/Philiphall6/Dopamine-private/actions/runs/39387291888) (`success`) |
+| IPA SHA-256 | `541A21AC39E652DBF4B6C7825925E1670BA8C4B86BAADA4EBCF54542E1CC9EEC` |
 | Embedded revision | `self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1` |
 | Safety mode | `no-gfx-mmio` |
 | Probe markers | `titan.notification-binding.link`, `titan.zero-packet.record-contract` |
 | Offline tests | 297 passing |
 | Call boundary | One selector 14, one selector 24, at most one selector 25 |
+| Compiled evidence | selectors `0x0e`, `0x18`, `0x19`; queue offsets `0x428/+0x430`; record `0x40` |
 
 Last device-tested private build (ABI v3, retired):
 
@@ -126,6 +127,7 @@ Deployment order:
 - Functional ledger: [`docs/A15_IOS26_OFFLINE_FUNCTIONAL_PATH_2026_10_19.md`](docs/A15_IOS26_OFFLINE_FUNCTIONAL_PATH_2026_10_19.md)
 - Blocker schema: [`docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md`](docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md)
 - Detailed worklog: [`docs/A15_IOS26_WORKLOG.md`](docs/A15_IOS26_WORKLOG.md)
+- Current private build: [`docs/A15_IOS26_PRIVATE_BUILD_V4_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_V4_2026_10_20.md)
 - Latest device-tested private build: [`docs/A15_IOS26_PRIVATE_BUILD_V3_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_V3_2026_10_20.md)
 - Retired v2 private build: [`docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md)
 - Current G14P ABI: [`docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md`](docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md)

@@ -14,7 +14,7 @@ but the effect has not yet been exercised safely on the device.
   -> [RUNTIME PASS] owned AGX client, shared buffer and same-client queue
   -> [RUNTIME PASS] selector-25 G14P wrapper ABI
        selector 25, four scalars, live record size 0x40
-  -> [STATIC PASS / SOURCE ADAPTED / DEVICE PENDING]
+  -> [COMPILED PASS / DEVICE PENDING]
        selector 14 notification create -> selector 24 bind -> queue+0x428/+0x430
   -> [STATIC PASS] MDSID packet 0x0e reaches the firmware handler
   -> [STATIC PASS] low target VA resolves through active GXF TTBR0
@@ -77,7 +77,7 @@ context survival still require one bounded runtime observation.
 | Kernel foothold | RUNTIME PASS | None for this stage |
 | AGX object identity and owned queue | RUNTIME PASS | Packet consumption remains separate |
 | Selector-25 ABI | RUNTIME PASS | Wrapper accepted the `0x40` contract; batch reached its missing-notification gate |
-| Notification create/bind | STATIC PASS / SOURCE READY | One selector-14/24 run and stable `queue+0x428/+0x430` relations |
+| Notification create/bind | COMPILED PASS / DEVICE PENDING | One selector-14/24 run and stable `queue+0x428/+0x430` relations |
 | Bound empty selector-25 call | DEVICE PENDING | One accepted record and cleanup observation |
 | MDSID-to-GXF-TTBR0 binding | STATIC PASS | Runtime packet transport and an owned target readback |
 | Active-root discovery through BEE7 | STATIC PASS / RUNTIME PENDING | Confirm both returned roots on-device without mutation |
@@ -110,8 +110,9 @@ context survival still require one bounded runtime observation.
    live firmware-vtable slots without invoking them.
 5. DONE: run ABI v3 once; it returned `0xe00002bc` with unchanged state because
    the command queue had no notification binding at `+0x428`.
-6. NEXT: build and run one notification-bound empty selector-25 probe; it must
-   use selectors 14/24 once each and selector 25 at most once.
+6. BUILD DONE / DEVICE NEXT: run the verified notification-bound empty
+   selector-25 probe once; it uses selectors 14/24 once each and selector 25 at
+   most once.
 7. NEXT: define one normal app-side power-assertion observation with exact
    queue, buffer, context and registered-root stability checks.
 8. NEXT: define cloned-root construction from the live root without inventing

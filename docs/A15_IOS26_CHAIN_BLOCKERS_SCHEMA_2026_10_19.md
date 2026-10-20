@@ -10,7 +10,7 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
 [RUNTIME PASS] Correct G14P selector-25 wrapper ABI
    |    selector 25 accepted four scalars and the 0x40-byte record contract
    |
-[STATIC PASS / SOURCE READY] IOGPU notification prerequisite
+[COMPILED PASS / DEVICE PENDING] IOGPU notification prerequisite
    |    selector 14 creates 256 x 32 bytes; selector 24 binds queue+0x428/+0x430
    |
 [STATIC PASS] MDSID packet route and low-VA GXF-TTBR0 binding
@@ -76,8 +76,9 @@ entry and later exercise a low virtual address through the cloned root.
 
 This is a coherent static physical-write candidate, not a working jailbreak.
 ABI v3 closed the record-size question and exposed the ordinary notification
-prerequisite before any backend or parser work. The next useful IPA creates and
-binds exactly one notification queue, validates the resulting kernel relations,
-then performs one empty selector-25 call. A power-transition observation comes
-only after that call is accepted; nonempty packets, root replacement and
-protected writes remain disabled.
+prerequisite before any backend or parser work. Private run `39387291888`
+compiled and packaged the verified v4 candidate. It creates and binds exactly
+one notification queue, validates the resulting kernel relations, then performs
+one empty selector-25 call. A power-transition or nonempty MDSID observation
+comes only after that call is accepted; root replacement and protected writes
+remain disabled.

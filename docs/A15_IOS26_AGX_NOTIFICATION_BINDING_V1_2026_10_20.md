@@ -65,5 +65,11 @@ write, protected-memory write, root replacement, bootstrap or Sileo launch.
 - `python tools/a15_ios26/check_research_integration.py`: pass.
 - `python -m unittest discover -s tools/a15_ios26 -p "test_*.py"`: 297 pass.
 - Exact-image notification audit: pass.
-- Private CI and compiled IPA inspection: pending.
+- Private CI run `39387291888`: pass for source commit
+  `ecb789d505fef44aed3088c5f0af34ffcf1ac6f9`.
+- Compiled IPA inspection: pass. SHA-256
+  `541A21AC39E652DBF4B6C7825925E1670BA8C4B86BAADA4EBCF54542E1CC9EEC`.
+- Compiled Titan contains one selector 14 call, one selector 24 call and one
+  selector 25 call in their bounded probe functions. It also contains the
+  `queue+0x428/+0x430`, `device+0x268` and `0x40` guards.
 - Device run: pending and limited to one attempt after IPA verification.
