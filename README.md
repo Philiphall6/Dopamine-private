@@ -63,12 +63,14 @@ perform GPU MMIO, write physical memory, or modify protected memory.
 
 Deployment order:
 
-1. Build one IPA from the exact private commit and verify its embedded revision.
-2. Install and run it once on the exact target; do not retry automatically.
-3. Accept promotion only if the call contract and cleanup observations pass.
-4. Then build a separate power-lifecycle observation that checks queue, buffer,
+1. Trigger the private GitHub Actions workflow manually for one exact commit;
+   documentation and source pushes do not build automatically.
+2. Build one IPA from that commit and verify its embedded revision.
+3. Install and run it once on the exact target; do not retry automatically.
+4. Accept promotion only if the call contract and cleanup observations pass.
+5. Then build a separate power-lifecycle observation that checks queue, buffer,
    context and registered-root stability.
-5. Root replacement, physical writes and SPTM work stay disabled until their
+6. Root replacement, physical writes and SPTM work stay disabled until their
    restoration contracts are independently complete.
 
 ### Evidence and maintenance
