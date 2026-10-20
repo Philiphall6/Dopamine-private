@@ -100,6 +100,77 @@ static void A15ActiveProbeCheckpoint(NSString *stage, NSString *status, NSString
     [[DOUIManager sharedInstance] sendLog:line debug:NO];
 }
 
+#if SAFE_DIAGNOSTIC_ONLY
+static BOOL A15RunSafeUserlandMappingDiagnostic(void)
+{
+    const size_t pageSize = 0x4000;
+    const NSUInteger iterations = 64;
+    const uint64_t anchorPattern = 0x534146455F4D4150ULL;
+    void *anchor = MAP_FAILED;
+
+    A15ActiveProbeCheckpoint(@"safe.userland-mapping", @"START",
+        @"64 app-owned anonymous MAP_SHARED mappings; no physical target or kernel path");
+
+    anchor = mmap(NULL, pageSize, PROT_READ | PROT_WRITE,
+                  MAP_ANON | MAP_SHARED, -1, 0);
+    if (anchor == MAP_FAILED) {
+        A15ActiveProbeCheckpoint(@"safe.userland-mapping", @"FAIL",
+            [NSString stringWithFormat:@"anchor mmap failed errno=%d", errno]);
+        return NO;
+    }
+
+    memcpy(anchor, &anchorPattern, sizeof(anchorPattern));
+    if (memcmp(anchor, &anchorPattern, sizeof(anchorPattern)) != 0) {
+        munmap(anchor, pageSize);
+        A15ActiveProbeCheckpoint(@"safe.userland-mapping", @"FAIL",
+            @"anchor app-memory readback mismatch");
+        return NO;
+    }
+
+    NSUInteger completed = 0;
+    BOOL passed = YES;
+    for (NSUInteger i = 0; i < iterations; i++) {
+        void *mapping = mmap(NULL, pageSize, PROT_READ | PROT_WRITE,
+                             MAP_ANON | MAP_SHARED, -1, 0);
+        if (mapping == MAP_FAILED) {
+            A15ActiveProbeCheckpoint(@"safe.userland-mapping", @"FAIL",
+                [NSString stringWithFormat:@"iteration=%lu mmap failed errno=%d",
+                    (unsigned long)i, errno]);
+            passed = NO;
+            break;
+        }
+
+        uint64_t pattern = anchorPattern ^ (uint64_t)i;
+        memcpy(mapping, &pattern, sizeof(pattern));
+        if (memcmp(mapping, &pattern, sizeof(pattern)) != 0) {
+            A15ActiveProbeCheckpoint(@"safe.userland-mapping", @"FAIL",
+                [NSString stringWithFormat:@"iteration=%lu app-memory readback mismatch",
+                    (unsigned long)i]);
+            munmap(mapping, pageSize);
+            passed = NO;
+            break;
+        }
+
+        if (munmap(mapping, pageSize) != 0) {
+            A15ActiveProbeCheckpoint(@"safe.userland-mapping", @"FAIL",
+                [NSString stringWithFormat:@"iteration=%lu munmap failed errno=%d",
+                    (unsigned long)i, errno]);
+            passed = NO;
+            break;
+        }
+        completed++;
+    }
+
+    BOOL anchorReleased = munmap(anchor, pageSize) == 0;
+    passed = passed && anchorReleased && completed == iterations;
+    A15ActiveProbeCheckpoint(@"safe.userland-mapping", passed ? @"PASS" : @"STOP",
+        [NSString stringWithFormat:@"completed=%lu/%lu anchor-released=%s; userland-only",
+            (unsigned long)completed, (unsigned long)iterations,
+            anchorReleased ? "yes" : "no"]);
+    return passed;
+}
+#endif
+
 typedef int (*A15ExactKernelRead)(uint64_t address, void *output, size_t size);
 typedef int (*A15ExactKernelWrite)(uint64_t address, const void *input, size_t size);
 
@@ -669,6 +740,18 @@ static void A15RunAGXServiceCensus(void)
 
     NSString *runID = NSUUID.UUID.UUIDString;
     setenv("A15_ACTIVE_PROBE_RUN_ID", runID.UTF8String, 1);
+#if SAFE_DIAGNOSTIC_ONLY
+    A15ActiveProbeCheckpoint(@"probe.entry", @"START",
+        @"target=iPhone14,2 build=23A355 mode=safe-userland-diagnostic revision=safe-userland-mapping-v1");
+    if (!A15RunSafeUserlandMappingDiagnostic()) {
+        *errOut = [NSError errorWithDomain:JBErrorDomain
+            code:JBErrorCodeFailedExploitation
+            userInfo:@{NSLocalizedDescriptionKey: @"Safe userland mapping diagnostic stopped; inspect the persisted checkpoints."}];
+    }
+    A15ActiveProbeCheckpoint(@"probe.cleanup", @"PASS",
+        @"safe diagnostic ended before XPF, ClearSword, Titan, IOSurface or SPTM");
+    return;
+#endif
     A15ActiveProbeCheckpoint(@"probe.entry", @"START", @"target=iPhone14,2 build=23A355 mode=active-titan-bounded revision=self-page-write-v1+agx-notification-map-v3+rtkit-mmio-disabled-v1");
 
     A15RunAGXServiceCensus();
