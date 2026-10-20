@@ -14,8 +14,10 @@ but the effect has not yet been exercised safely on the device.
   -> [RUNTIME PASS] owned AGX client, shared buffer and same-client queue
   -> [RUNTIME PASS] selector-25 G14P wrapper ABI
        selector 25, four scalars, live record size 0x40
-  -> [COMPILED PASS / DEVICE PENDING]
+  -> [RUNTIME PASS]
        selector 14 notification create -> selector 24 bind -> queue+0x428/+0x430
+  -> [RUNTIME PASS] bound selector-25 empty record accepted and cleaned up
+       one 0x40 record returned 0; dispatch and command index advanced once
   -> [STATIC PASS] MDSID packet 0x0e reaches the firmware handler
   -> [STATIC PASS] low target VA resolves through active GXF TTBR0
   -> [STATIC PASS] BEE7 exposes the active root fields read-only
@@ -30,7 +32,6 @@ but the effect has not yet been exercised safely on the device.
   -> [RUNTIME BLOCKER] deterministic app-side power assertion and timing
   -> [RUNTIME BLOCKER] owned queue/context survives one normal transition
   -> [RUNTIME BLOCKER] owned 16 KiB cloned root accepted by firmware
-  -> [RUNTIME BLOCKER] bound empty selector-25 record accepted and cleaned up
   -> [RUNTIME BLOCKER] nonempty selector-25/MDSID write accepted
   -> [RUNTIME BLOCKER] registry and live-TTBR0 rollback proven
   -> [BLOCKED] stable physical write independently observed
@@ -77,9 +78,9 @@ context survival still require one bounded runtime observation.
 | Kernel foothold | RUNTIME PASS | None for this stage |
 | AGX object identity and owned queue | RUNTIME PASS | Packet consumption remains separate |
 | Selector-25 ABI | RUNTIME PASS | Wrapper accepted the `0x40` contract; batch reached its missing-notification gate |
-| Notification create/bind | COMPILED PASS / DEVICE PENDING | One selector-14/24 run and stable `queue+0x428/+0x430` relations |
-| Bound empty selector-25 call | DEVICE PENDING | One accepted record and cleanup observation |
-| MDSID-to-GXF-TTBR0 binding | STATIC PASS | Runtime packet transport and an owned target readback |
+| Notification create/bind | RUNTIME PASS | One selector-14/24 run established stable `queue+0x428/+0x430` relations |
+| Bound empty selector-25 call | RUNTIME PASS | One accepted record and immediate cleanup observation |
+| MDSID-to-GXF-TTBR0 binding | STATIC PASS | Runtime packet transport, effective callback identity, complete effects and final release |
 | Active-root discovery through BEE7 | STATIC PASS / RUNTIME PENDING | Confirm both returned roots on-device without mutation |
 | RTBuddy class-`0xb` producer | STATIC PASS | Deterministic app-visible transition and lifecycle |
 | RTBuddy-to-firmware lifecycle | STATIC PASS | App-visible power assertion and queue/context survival |
@@ -110,17 +111,18 @@ context survival still require one bounded runtime observation.
    live firmware-vtable slots without invoking them.
 5. DONE: run ABI v3 once; it returned `0xe00002bc` with unchanged state because
    the command queue had no notification binding at `+0x428`.
-6. BUILD DONE / DEVICE NEXT: run the verified notification-bound empty
-   selector-25 probe once; it uses selectors 14/24 once each and selector 25 at
-   most once.
-7. NEXT: define one normal app-side power-assertion observation with exact
+6. DONE: the notification-bound empty selector-25 probe ran once; selectors
+   14/24/25 completed with one accepted empty record and cleanup.
+7. NEXT: retain the offline MDSID no-go until effective callback identity,
+   complete effects and final release have independent evidence.
+8. DEFERRED: define one normal app-side power-assertion observation with exact
    queue, buffer, context and registered-root stability checks.
-8. NEXT: define cloned-root construction from the live root without inventing
+9. DEFERRED: define cloned-root construction from the live root without inventing
    attribute bits, plus registry and live-TTBR0 rollback.
 
-The notification-bound selector-25 probe in step 6 is the only currently
-justified IPA. It does not install a root, force a power transition, perform
-MMIO, submit a nonempty command, or attempt a protected-memory write.
+No IPA for a nonempty MDSID record is currently justified. The completed probe
+did not install a root, force a power transition, perform MMIO, submit a
+nonempty command, or attempt a protected-memory write.
 
 Machine-readable evidence:
 

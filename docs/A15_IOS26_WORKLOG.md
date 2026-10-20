@@ -1852,3 +1852,22 @@ other nonempty record was sent. The next work item is offline-only analysis of
 the nonempty MDSID route and its cleanup. A fresh artifact and an explicit
 review are required before any future device action.
 
+### 2026-10-20: nonempty MDSID route retained as explicit offline no-go
+
+The exact 23A355 kernelcache and G14P firmware were re-audited after the
+accepted empty record. The independent MDSID-to-GXF-TTBR0 audit again proves
+the static transport and low-address-space binding. The selector-25 boundary
+audit independently proves the nonempty parser route. Neither result observes a
+nonempty device submission.
+
+`audit_agx_submit_boundary.py` now emits a machine-readable
+`runtime_mdsid_gate` with state `STATIC_ROUTE_ONLY_NO_GO`. It records the
+unresolved facts: nonempty runtime submission, effective command-buffer and
+firmware callback identities, complete callback/backend effects, and final
+backend release before selector return. The gate always denies a device
+submission while those facts are missing.
+
+This is a progress-control change only. It does not build an IPA, alter Titan's
+runtime probe, send a record to the phone, or enable MMIO, physical/protected
+writes, root replacement, bootstrap or Sileo.
+

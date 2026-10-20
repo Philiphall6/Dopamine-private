@@ -10,8 +10,11 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
 [RUNTIME PASS] Correct G14P selector-25 wrapper ABI
    |    selector 25 accepted four scalars and the 0x40-byte record contract
    |
-[COMPILED PASS / DEVICE PENDING] IOGPU notification prerequisite
+[RUNTIME PASS] IOGPU notification prerequisite
    |    selector 14 creates 256 x 32 bytes; selector 24 binds queue+0x428/+0x430
+   |
+[RUNTIME PASS] Bound empty selector-25 record and immediate cleanup
+   |    one 0x40 record returned 0; dispatch and command index advanced once
    |
 [STATIC PASS] MDSID packet route and low-VA GXF-TTBR0 binding
    |
@@ -31,8 +34,8 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
    |
 [STATIC PASS] Command 3 -> current-context registered root -> TTBR0_EL1
    |
-[BLOCKER 1] Bound empty selector-25 call and cleanup
-   |    ABI v3 returned 0xe00002bc before backend because queue+0x428 was null
+[BLOCKER 1] Nonempty selector-25/MDSID runtime transport
+   |    Static route is exact, but runtime callback identity, complete effects and final release are unobserved
    |
 [BLOCKER 2] Deterministic app-side power transition
    |    Must request normal power and keep queue/context alive
@@ -40,10 +43,7 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
 [BLOCKER 3] Owned cloned-root acceptance
    |    Firmware must accept owned DRAM as the registered root frame
    |
-[BLOCKER 4] Nonempty selector-25/MDSID runtime transport
-   |    Allowed only after the bound empty-record call and cleanup pass
-   |
-[BLOCKER 5] Safe rollback
+[BLOCKER 4] Safe rollback
    |    Restore registry entry, trigger command 3 again, verify live TTBR0
    |
 [BLOCKED] Stable physical write independently observed and restored
@@ -75,10 +75,9 @@ entry and later exercise a low virtual address through the cloned root.
 ## Current decision
 
 This is a coherent static physical-write candidate, not a working jailbreak.
-ABI v3 closed the record-size question and exposed the ordinary notification
-prerequisite before any backend or parser work. Private run `39387291888`
-compiled and packaged the verified v4 candidate. It creates and binds exactly
-one notification queue, validates the resulting kernel relations, then performs
-one empty selector-25 call. A power-transition or nonempty MDSID observation
-comes only after that call is accepted; root replacement and protected writes
-remain disabled.
+Private run `39392906389` completed the ordinary notification prerequisite and
+one empty selector-25 record on the target. The MDSID route remains static-only:
+the exact-image audit now emits `STATIC_ROUTE_ONLY_NO_GO` because runtime
+nonempty submission, callback identity, complete effects and final release are
+not yet observed. No MDSID IPA is authorized; root replacement and protected
+writes remain disabled.

@@ -69,8 +69,10 @@ This closes the empty-record gate, not the jailbreak chain. No nonempty MDSID
 record has been submitted. The next activity is an offline review of the exact
 MDSID parser and cleanup boundaries. The exact-image audit establishes the
 static route, but explicitly leaves final deallocation timing and complete
-nonempty-packet effects unobserved. A separate source revision and a fresh,
-explicitly bounded review are required before any further device experiment.
+nonempty-packet effects unobserved. Its machine-readable gate is therefore
+`STATIC_ROUTE_ONLY_NO_GO`, which explicitly denies a device submission. A
+separate source revision and a fresh, explicitly bounded review are required
+before any further device experiment.
 
 The apparent final `titan.run FAIL return=-1` is the probe runner's deliberate
 stop after a completed bounded stage; the preceding `titan.zero-packet PASS`
@@ -163,6 +165,7 @@ Deployment order:
 - Retired v2 private build: [`docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md)
 - Current G14P ABI: [`docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md`](docs/A15_IOS26_AGX_ZERO_PACKET_ABI_V3_2026_10_20.md)
 - Notification prerequisite: [`docs/A15_IOS26_AGX_NOTIFICATION_BINDING_V1_2026_10_20.md`](docs/A15_IOS26_AGX_NOTIFICATION_BINDING_V1_2026_10_20.md)
+- Nonempty MDSID runtime gate: [`tools/a15_ios26/audit_agx_submit_boundary.py`](tools/a15_ios26/audit_agx_submit_boundary.py)
 - V4 log triage: [`tools/a15_ios26/triage_agx_notification_bound_probe.py`](tools/a15_ios26/triage_agx_notification_bound_probe.py)
 - Power lifecycle audit: [`tools/a15_ios26/audit_agx_firmware_power_lifecycle.py`](tools/a15_ios26/audit_agx_firmware_power_lifecycle.py)
 

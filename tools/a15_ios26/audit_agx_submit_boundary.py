@@ -965,6 +965,33 @@ def verify_nonempty_mdsid_route(agx: MachOImage, iogpu: MachOImage) -> dict:
     }
 
 
+def derive_nonempty_mdsid_runtime_gate(backend: dict, route: dict,
+                                       command_callback: dict,
+                                       firmware_callback: dict) -> dict:
+    """Keep static MDSID evidence distinct from authorization to probe a device."""
+    missing = []
+    if not route["runtime_submission_observed"]:
+        missing.append("nonempty MDSID submission has not been observed")
+    if not backend["complete_effects_bounded"]:
+        missing.append("backend effects are not completely bounded")
+    if not backend["cleanup_contract"]["final_release_before_selector_return_proven"]:
+        missing.append("final backend release before selector return is not proven")
+    if not command_callback["runtime_object_identity_observed"]:
+        missing.append("effective command-buffer callback identity is not observed")
+    if not command_callback["complete_effects_bounded"]:
+        missing.append("command-buffer callback effects are not completely bounded")
+    if not firmware_callback["runtime_field_object_and_final_vtable_observed"]:
+        missing.append("runtime firmware object and final vtable are not observed")
+    if not firmware_callback["effective_callback_target_resolved"]:
+        missing.append("effective firmware callback target is not resolved")
+    return {
+        "state": "STATIC_ROUTE_ONLY_NO_GO",
+        "device_submission_authorized": False,
+        "missing_observations": missing,
+        "next_action": "offline analysis only; require independent review before any device experiment",
+    }
+
+
 def verify_command_buffer_callback(agx: MachOImage) -> dict:
     name = agx.read_cstring(COMMAND_BUFFER_CLASS_NAME)
     if name != "AGXCommandBuffer":
@@ -1180,12 +1207,34 @@ def audit(path: pathlib.Path, journal: pathlib.Path | None = None) -> dict:
     kernel = MachOImage(path, KERNEL_IMAGE_NAME)
     backend_cleanup = verify_block_fence_cleanup(agx, kernel, process)
     base_helper = verify_base_init_helper(image, kernel)
+    candidate_backend = {
+        "static_vtable_entries": decoded_backend,
+        "static_metaclass_chain": metaclass_chain,
+        "prepare_instruction_count": len(prepare),
+        "object_state_write_dominates_return": state_write_required,
+        "indirect_call_dominates_return": indirect_call_required,
+        "statically_resolved_base_initializer": base_initializer,
+        "statically_resolved_base_helper": base_helper,
+        "reachable_conditional_pool_write_sites": [f"{address:#x}" for address in PREPARE_POOL_WRITES],
+        "possible_pool_reservation_return_without_local_rollback": True,
+        "retention_path_sites": [f"{address:#x}" for address in PREPARE_RETENTION_PATH],
+        "excluded_local_rollback_writes": [f"{address:#x}" for address in PREPARE_ROLLBACK_WRITES],
+        "runtime_object_identity_observed": False,
+        "cleanup_contract": backend_cleanup,
+        "complete_effects_bounded": False,
+    }
     queue_packet_route = verify_queue_packet_route(agx, image)
     notification_prerequisite = verify_notification_prerequisite(image)
     notification_queue_identity = verify_notification_queue_vtable(image)
     nonempty_mdsid_route = verify_nonempty_mdsid_route(agx, image)
     command_buffer_callback = verify_command_buffer_callback(agx)
     firmware_callback_candidate = verify_firmware_callback_candidate(agx, kernel)
+    runtime_mdsid_gate = derive_nonempty_mdsid_runtime_gate(
+        candidate_backend,
+        nonempty_mdsid_route,
+        command_buffer_callback,
+        firmware_callback_candidate,
+    )
 
     result = {
         "build": "23A355",
@@ -1197,26 +1246,12 @@ def audit(path: pathlib.Path, journal: pathlib.Path | None = None) -> dict:
         "backend_call_dominates_parser_call": backend_required,
         "backend_success_gate_dominates_parser_call": success_gate_required,
         "backend_failure_branch_skips_parser": failure_skips_parser,
-        "candidate_agx_backend": {
-            "static_vtable_entries": decoded_backend,
-            "static_metaclass_chain": metaclass_chain,
-            "prepare_instruction_count": len(prepare),
-            "object_state_write_dominates_return": state_write_required,
-            "indirect_call_dominates_return": indirect_call_required,
-            "statically_resolved_base_initializer": base_initializer,
-            "statically_resolved_base_helper": base_helper,
-            "reachable_conditional_pool_write_sites": [f"{address:#x}" for address in PREPARE_POOL_WRITES],
-            "possible_pool_reservation_return_without_local_rollback": True,
-            "retention_path_sites": [f"{address:#x}" for address in PREPARE_RETENTION_PATH],
-            "excluded_local_rollback_writes": [f"{address:#x}" for address in PREPARE_ROLLBACK_WRITES],
-            "runtime_object_identity_observed": False,
-            "cleanup_contract": backend_cleanup,
-            "complete_effects_bounded": False,
-        },
+        "candidate_agx_backend": candidate_backend,
         "observed_queue_packet_route": queue_packet_route,
         "notification_binding_prerequisite": notification_prerequisite,
         "notification_queue_identity": notification_queue_identity,
         "static_nonempty_mdsid_route": nonempty_mdsid_route,
+        "runtime_mdsid_gate": runtime_mdsid_gate,
         "static_command_buffer_callback": command_buffer_callback,
         "static_firmware_callback_candidate": firmware_callback_candidate,
         "parser_only_selector25_device_test_bounded": False,

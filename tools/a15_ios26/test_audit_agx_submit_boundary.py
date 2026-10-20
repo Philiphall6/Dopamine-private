@@ -113,6 +113,7 @@ from audit_agx_submit_boundary import (
     branch_target,
     build_graph,
     dominates,
+    derive_nonempty_mdsid_runtime_gate,
     path_through,
     reachable,
     reachable_avoiding,
@@ -356,6 +357,28 @@ class SubmitBoundaryTests(unittest.TestCase):
                          "0x40000001")
         self.assertTrue(result["static_route_established"])
         self.assertFalse(result["runtime_submission_observed"])
+
+    def test_nonempty_mdsid_static_route_is_an_explicit_device_no_go(self):
+        result = derive_nonempty_mdsid_runtime_gate(
+            {
+                "complete_effects_bounded": False,
+                "cleanup_contract": {
+                    "final_release_before_selector_return_proven": False,
+                },
+            },
+            {"runtime_submission_observed": False},
+            {
+                "runtime_object_identity_observed": False,
+                "complete_effects_bounded": False,
+            },
+            {
+                "runtime_field_object_and_final_vtable_observed": False,
+                "effective_callback_target_resolved": False,
+            },
+        )
+        self.assertEqual(result["state"], "STATIC_ROUTE_ONLY_NO_GO")
+        self.assertFalse(result["device_submission_authorized"])
+        self.assertGreaterEqual(len(result["missing_observations"]), 7)
 
     def test_nonempty_dispatch_slot_mutation_is_rejected(self):
         agx = SimpleNamespace(
