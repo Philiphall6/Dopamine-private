@@ -53,6 +53,7 @@ jobs:
           tar -xf "$THEOS/sdks/iPhoneOS16.5.sdk.tar" -C "$THEOS/sdks"
           rm "$THEOS/sdks/iPhoneOS16.5.sdk.tar"
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+          echo "CPATH=$THEOS/sdks/iPhoneOS16.5.sdk/usr/include:${CPATH:-}" >> "$GITHUB_ENV"
 
       - name: Build trustcache utility
         run: |
