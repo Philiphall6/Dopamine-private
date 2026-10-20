@@ -60,7 +60,6 @@ jobs:
             -target Titan \
             -configuration Debug \
             -sdk iphoneos \
-            -derivedDataPath "$RUNNER_TEMP/titan-derived-data" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -84,4 +83,3 @@ jobs:
           if-no-files-found: warn
           path: |
             ${{ runner.temp }}/*.log
-            ${{ runner.temp }}/titan-derived-data/Logs
