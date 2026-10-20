@@ -31,20 +31,44 @@ jobs:
       - name: Install ldid
         uses: dhinakg/procursus-action@main
         with:
-          packages: ldid
+          packages: ldid findutils sed coreutils make dpkg
 
       - name: Install GNU make
         run: |
           brew install make
+          brew install libarchive
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
           echo "/opt/procursus/bin" >> "$GITHUB_PATH"
+
+      - name: Install THEOS and iPhoneOS SDK headers
+        run: |
+          set -euo pipefail
+          export THEOS="${GITHUB_WORKSPACE}/theos"
+          mkdir -p "$THEOS"
+          curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos > install-theos.sh
+          gsed -E "/^\s*get_theos\s*$/,+1 s/^(\s*)(get_sdks)\s*$/\1mkdir -p \${THEOS}\/sdks\n\1touch \${THEOS}\/sdks\/sdk\n\1\2/g" -i install-theos.sh
+          bash install-theos.sh
+          curl -fsSL https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz --output "$THEOS/sdks/iPhoneOS16.5.sdk.tar.xz"
+          gunzip "$THEOS/sdks/iPhoneOS16.5.sdk.tar.xz"
+          tar -xf "$THEOS/sdks/iPhoneOS16.5.sdk.tar" -C "$THEOS/sdks"
+          rm "$THEOS/sdks/iPhoneOS16.5.sdk.tar"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+
+      - name: Build trustcache utility
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/CRKatri/trustcache "$RUNNER_TEMP/trustcache"
+          cd "$RUNNER_TEMP/trustcache"
+          export CFLAGS="${CFLAGS:-} -I$(brew --prefix openssl)/include -arch arm64"
+          export LDFLAGS="${LDFLAGS:-} -L$(brew --prefix openssl)/lib -arch arm64"
+          gmake -j"$(sysctl -n hw.logicalcpu)" OPENSSL=1
+          sudo cp trustcache /opt/procursus/bin/
 
       - name: Download application resources
         working-directory: Application/Dopamine/Resources
         run: ./download_bootstraps.sh
 
       - name: Build safe diagnostic IPA
-        working-directory: Application
         run: gmake SAFE_DIAGNOSTIC=1
 
       - name: Verify IPA contents
