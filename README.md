@@ -149,6 +149,11 @@ blocked behind the nonempty MDSID review, power-lifecycle survival, reversible
 root replacement, a stable physical-write primitive and the SPTM/PAPT policy
 boundary.
 
+The current lifecycle-hardening revision is AGX lifecycle V3 and remains
+offline-only. It adds a manual macOS compile-check workflow and an offline
+JSONL audit while preserving V2's resource/error contract; it does not
+promote a new IPA or authorize a device run.
+
 Deployment order:
 
 1. Trigger the private GitHub Actions workflow manually for one exact commit;
@@ -177,6 +182,12 @@ Deployment order:
 - Correlation tool: [`tools/a15_ios26/triage_agx_mdsid_readiness.py`](tools/a15_ios26/triage_agx_mdsid_readiness.py)
 - V4 log triage: [`tools/a15_ios26/triage_agx_notification_bound_probe.py`](tools/a15_ios26/triage_agx_notification_bound_probe.py)
 - Power lifecycle audit: [`tools/a15_ios26/audit_agx_firmware_power_lifecycle.py`](tools/a15_ios26/audit_agx_firmware_power_lifecycle.py)
+- AGX lifecycle diagnostic: [`docs/A15_IOS26_AGX_LIFECYCLE_DIAGNOSTIC_V1_2026_10_20.md`](docs/A15_IOS26_AGX_LIFECYCLE_DIAGNOSTIC_V1_2026_10_20.md)
+- AGX lifecycle V2: [`docs/A15_IOS26_AGX_LIFECYCLE_V2_2026_10_20.md`](docs/A15_IOS26_AGX_LIFECYCLE_V2_2026_10_20.md)
+- AGX lifecycle V2 offline tests: [`tools/a15_ios26/test_agx_lifecycle_v2.py`](tools/a15_ios26/test_agx_lifecycle_v2.py)
+- AGX lifecycle V3: [`docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md`](docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md)
+- AGX lifecycle log audit: [`tools/a15_ios26/audit_agx_lifecycle_log.py`](tools/a15_ios26/audit_agx_lifecycle_log.py)
+- Manual macOS compile check: [`.github/workflows/a15-ios26-compile-check.yml`](.github/workflows/a15-ios26-compile-check.yml)
 
 Keep this section synchronized whenever a stage changes state or a new IPA is
 promoted. Extracted Apple firmware, phone journals, signing material and local

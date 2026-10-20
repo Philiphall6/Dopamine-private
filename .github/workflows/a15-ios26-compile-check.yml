@@ -1,0 +1,78 @@
+name: "Dopamine: A15 iOS26 compile check"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-check:
+    runs-on: macos-latest
+    steps:
+      - name: Xcode setup
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install compile-only tools
+        uses: dhinakg/procursus-action@main
+        with:
+          packages: ldid
+
+      - name: Install libarchive headers
+        run: brew install libarchive
+
+      - name: Prepare Titan's generated headers and libraries
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -C BaseBin .build .include 2>&1 | tee "$RUNNER_TEMP/basebin-prepare.log"
+          make -C BaseBin ChOma 2>&1 | tee "$RUNNER_TEMP/choma-build.log"
+          make -C BaseBin libjailbreak 2>&1 | tee "$RUNNER_TEMP/libjailbreak-build.log"
+          test -f BaseBin/.include/libjailbreak/libjailbreak.h
+          test -f BaseBin/libjailbreak/libjailbreak.dylib
+          test -f BaseBin/.build/libchoma.dylib
+
+      - name: Compile Titan.framework only
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Application/Dopamine.xcodeproj \
+            -target Titan \
+            -configuration Debug \
+            -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/titan-derived-data" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee "$RUNNER_TEMP/titan-xcodebuild.log"
+
+      - name: Run offline verification suite
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m unittest discover -s tools/a15_ios26 -p 'test_*.py' 2>&1 | tee "$RUNNER_TEMP/python-tests.log"
+          python3 -m compileall -q tools/a15_ios26 2>&1 | tee "$RUNNER_TEMP/python-compileall.log"
+          python3 tools/a15_ios26/check_research_integration.py 2>&1 | tee "$RUNNER_TEMP/integration-check.log"
+          git diff --check 2>&1 | tee "$RUNNER_TEMP/git-diff-check.log"
+
+      - name: Upload compile logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a15-ios26-compile-check-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/*.log
+            ${{ runner.temp }}/titan-derived-data/Logs

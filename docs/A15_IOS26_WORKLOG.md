@@ -1886,3 +1886,82 @@ authorized, built or run. The remaining blockers are callback execution and
 effects, complete backend release timing, host wake/root acceptance and
 power-lifecycle recovery.
 
+### 2026-10-20: AGX lifecycle diagnostic hardening (offline)
+
+The private research branch now records an explicit AGX lifecycle state across
+service acquisition, connection open, shared-buffer creation, queue creation,
+notification creation/binding, page locking and cleanup. The queue's `ready`
+byte is retained as an observation, but the probe now records normal power
+assertion and context retention as `NOT_TESTED`; the field alone is not proof
+that the firmware context survives.
+
+The fixed two-times-1 ms post-selector-25 observation was replaced with a
+read-only settling window capped at 250 ms. It polls the existing firmware-pool
+and queue snapshots and requires two matching samples. This does not retry the
+call or add any nonempty record. AGX return values now include their Mach error
+string.
+
+The shared-alias cleanup path was also made idempotent. Even if the
+ClearSword redirect check fails, the helper continues through byte restoration,
+page unlock, connection close and service release. A duplicate cleanup is
+logged and suppressed. This fixes a concrete resource-lifetime gap without
+changing the existing device-facing selector set.
+
+This is a `STATIC PASS` only. No IPA was built, no device run was performed,
+and no MDSID, power transition, MMIO, physical/protected write, root,
+trust-cache, bootstrap or Sileo operation was added. Full details are in
+`docs/A15_IOS26_AGX_LIFECYCLE_DIAGNOSTIC_V1_2026_10_20.md`.
+
+### 2026-10-20: AGX lifecycle V2 resource and event contract (offline)
+
+V2 extends the existing lifecycle state with a session identifier, monotonic
+timestamps, operation names, return codes, durations, resource snapshots and
+close reasons. Selector 6, selector 12, selector 14, selector 24, the single
+empty selector-25 call, `IOServiceOpen`, `mlock`, `munlock`,
+`IOServiceClose` and `IOObjectRelease` now emit structured operation records.
+
+The cleanup helper keeps independent cleanup steps running after a partial
+failure. It only clears `pageLocked`, `connectionOpen`, `clientCreated` or
+`serviceHeld` after the corresponding operation succeeds, while neutralizing
+local handles to prevent a second release. Duplicate cleanup remains
+suppressed and visible. The queue `ready` byte is not promoted to proof of
+firmware-context persistence; power assertion and context retention remain
+`NOT_TESTED`.
+
+Added `tools/a15_ios26/test_agx_lifecycle_v2.py` with source-contract checks
+and an offline cleanup model covering normal, partial-failure and duplicate
+exit paths. This revision is `STATIC PASS` only: no Objective-C/Xcode build,
+IPA, device run, nonempty MDSID record, MMIO, physical/protected write,
+SPTM/PAPT operation, bootstrap or Sileo action was added.
+
+Full scope and validation limits are recorded in
+`docs/A15_IOS26_AGX_LIFECYCLE_V2_2026_10_20.md`.
+
+### 2026-10-20: AGX lifecycle V3 compile-check preparation (offline)
+
+Reviewed the V2 Objective-C changes and added an explicit `<mach/error.h>`
+include for `mach_error_string`; no other compile-time type or cleanup defect
+was identified statically. The V2 lifecycle fields, monotonic timestamps,
+session IDs, operation return codes, durations, resource snapshots and
+`NOT_TESTED` power/context states remain in place.
+
+Added the manual workflow
+`.github/workflows/a15-ios26-compile-check.yml`. It checks out submodules,
+installs only `ldid` and `libarchive` headers, prepares the generated BaseBin
+headers plus ChOma/libjailbreak dependencies, and runs `xcodebuild` on the
+`Titan` target with signing disabled. It does not invoke the IPA Makefile,
+download bootstraps, install to a device or upload an application artifact.
+The workflow was not triggered in this turn, so no `BUILD PASS` is claimed.
+
+Added `audit_agx_lifecycle_log.py` and its offline tests. The audit checks
+required JSONL fields, session/run consistency, monotonic ordering, operation
+durations and return codes, resource-state objects and close reasons. Local
+Python tests and static checks remain separate from the future macOS result.
+The completed local verification ran 315 tests with `OK`; `compileall`, the
+research integration check and `git diff --check` also passed.
+
+No nonempty MDSID record, GPU submission, MMIO, physical/protected write,
+SPTM/PAPT operation, bootstrap or Sileo action was added. Full details and the
+controlled-device preparation checklist are in
+`docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md`.
+
