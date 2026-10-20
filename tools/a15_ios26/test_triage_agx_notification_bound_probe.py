@@ -4,6 +4,7 @@ from test_triage_agx_iouat_object_probe import event
 from test_triage_agx_zero_packet_probe import complete_run as zero_run
 from triage_agx_notification_bound_probe import (
     LEGACY_REVISION,
+    PREVIOUS_REVISION,
     REQUIRED,
     REVISION,
     render_compact,
@@ -23,7 +24,7 @@ def complete_run():
         ("titan.notification-binding.create", "PASS"):
             "kr=0x0 output-size=0x10 address=0x105000000 id=1 count=1024 attempt=1/1",
         ("titan.notification-binding.registry", "PASS"):
-            "id=1 object=0xffffffe000200000 map=0xffffffe000300000 address=0x105000000/0x105000000 length=0x2000 expected=0x2000",
+            "id=1 object=0xffffffe000200000 map=0xffffffe000300000 address=0x105000000/0x105000000 length=0x2454 expected=0x2454",
         ("titan.notification-binding.bind", "START"):
             "selector=24 queue-id=1 notification-id=1 attempt=1/1",
         ("titan.notification-binding.bind", "PASS"):
@@ -72,7 +73,7 @@ class NotificationBoundTriageTests(unittest.TestCase):
         run = complete_run()
         registry = next(item for item in run if item["stage"] ==
                         "titan.notification-binding.registry")
-        registry["detail"] = registry["detail"].replace("length=0x2000", "length=0x4000")
+        registry["detail"] = registry["detail"].replace("length=0x2454", "length=0x4000")
         self.assertFalse(triage(run, "run-a")["notification_binding_ok"])
 
     def test_bind_block_is_incomplete(self):
@@ -108,6 +109,31 @@ class NotificationBoundTriageTests(unittest.TestCase):
         self.assertEqual(report["selector25_call"]["attempts"], 0)
         self.assertEqual(report["notification_queue_vtable"]["observed"],
                          "0xfffffff007e479a8")
+
+    def test_map_length_mismatch_stops_before_bind_and_submit(self):
+        run = complete_run()
+        run[0]["detail"] = run[0]["detail"].replace(REVISION, PREVIOUS_REVISION)
+        registry = next(item for item in run if
+                        (item["stage"], item["status"]) ==
+                        ("titan.notification-binding.registry", "PASS"))
+        registry["status"] = "BLOCKED"
+        registry["detail"] = registry["detail"].replace(
+            "expected=0x2454", "expected=0x2000")
+        zero_start = next(index for index, item in enumerate(run) if
+                          (item["stage"], item["status"]) ==
+                          ("titan.zero-packet", "START"))
+        del run[zero_start:]
+        bind_start = next(index for index, item in enumerate(run) if
+                          (item["stage"], item["status"]) ==
+                          ("titan.notification-binding.bind", "START"))
+        del run[bind_start:]
+        report = triage(run, "run-a")
+        self.assertEqual(report["verdict"],
+                         "notification_queue_map_length_mismatch_before_bind")
+        self.assertEqual(report["selector14_attempts"], 1)
+        self.assertEqual(report["selector24_attempts"], 0)
+        self.assertEqual(report["selector25_call"]["attempts"], 0)
+        self.assertEqual(report["notification_map_length"]["observed"], "0x2454")
 
 
 if __name__ == "__main__":

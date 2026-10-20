@@ -25,7 +25,7 @@ flowchart TD
     B[Reversible app-owned page alias write<br/>RUNTIME PASS]
     C[Owned AGX client, shared buffer and queue<br/>RUNTIME PASS]
     D[Selector 25 G14P 0x40 wrapper contract<br/>RUNTIME PASS]
-    E[Notification queue selector 14<br/>RUNTIME PASS; selector 24 pending]
+    E[Notification queue selector 14, vtable and map ABI<br/>RUNTIME PASS; selector 24 pending]
     P[MDSID packet and low-VA GXF TTBR0 route<br/>STATIC PASS]
     F[BEE7 active-root discovery<br/>STATIC PASS]
     G[16 KiB cloned-root format<br/>STATIC PASS]
@@ -64,17 +64,31 @@ remained unchanged. Exact-image control flow proves that this value is returned
 before backend allocation when `queue+0x428` is null. The missing prerequisite
 is therefore the normal IOGPU notification queue, not another record-size guess.
 
-The first notification-bound run reached selector 14 and created its owned
-notification queue, then stopped at a vtable guard before selector 24 or
-selector 25. Exact-image analysis corrected that guard from
-`0xfffffff007e42f28` to `0xfffffff007e479a8`. The only justified next device
-run is the verified bounded
-`self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1` probe.
-It creates one notification queue with selector 14, binds it once with selector
-24, verifies `queue+0x428` and `queue+0x430`, then makes at most one
-selector-25 call. It does not install a replacement root, force a power
-transition, perform GPU MMIO, write physical memory, or modify protected
-memory.
+The notification-vtable v2 run reached selector 14, created its owned
+notification queue and validated its exact vtable. It then stopped before
+selector 24 or selector 25 because the driver-owned `IOMemoryMap` length was
+`0x2454`, not the provisional payload-size expectation `0x2000`. The latter is
+still the `256 x 32` payload; `0x2454` is the observed map contract.
+
+The only justified next device run is
+`self-page-write-v1+agx-notification-map-v3+rtkit-mmio-disabled-v1`. It only
+corrects that map-length guard, then creates one notification queue with
+selector 14, binds it once with selector 24, and makes at most one selector-25
+call with the existing all-zero record. It does not submit MDSID, install a
+replacement root, force a power transition, perform GPU MMIO, write physical
+memory, or modify protected memory.
+
+Last device-tested private build (notification-vtable v2, retired at the map guard):
+
+| Field | Value |
+| --- | --- |
+| Source commit | `738ed6dee90553e80fded42b887fa181decd486b` |
+| GitHub Actions run | [`39390670856`](https://github.com/Philiphall6/Dopamine-private/actions/runs/39390670856) (`success`) |
+| IPA SHA-256 | `5F0ED6D13922C81948F717739642E525D1B0ABFB7755338CA6589A1A2840E6EE` |
+| Embedded revision | `self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1` |
+| Safety mode | `no-gfx-mmio` |
+| Device result | Selector 14 and notification vtable passed; map `0x2454` stopped before selectors 24 and 25 |
+| Call boundary reached | One selector 14; zero selectors 24 and 25 |
 
 Last device-tested private build (v4, retired at the vtable guard):
 

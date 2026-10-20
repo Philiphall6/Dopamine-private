@@ -1811,3 +1811,23 @@ guard: one selector 24 bind and at most one zero-record selector 25 call.
 Nonempty MDSID submission remains excluded pending a clean notification-bound
 empty-record observation.
 
+### 2026-10-20: notification map ABI observed and bounded v3 prepared
+
+The private notification-vtable v2 IPA, built from
+`738ed6dee90553e80fded42b887fa181decd486b` by successful private Actions run
+`39390670856`, was exercised once on iPhone14,2/23A355. Selector 14 created
+one queue, and the object vtable passed at `0xfffffff007e479a8` as expected.
+
+The run then stopped at the map contract before selector 24 or selector 25:
+the notification object held an `IOMemoryMap` at `+0x18`, with the returned
+user address at map `+0x28` and observed map length `0x2454` at `+0x30`.
+The prior guard expected the payload size `0x2000` (`256 * 32`) and therefore
+blocked deliberately. Connection cleanup passed and the phone did not restart.
+
+Revision `self-page-write-v1+agx-notification-map-v3+rtkit-mmio-disabled-v1`
+now keeps the payload and map contracts separate: `0x2000` remains the user
+payload capacity check, while `0x2454` is the exact observed driver map length.
+The next artifact retains one selector-14 create, one selector-24 bind and at
+most one all-zero selector-25 call. MDSID, GPU MMIO, physical/protected writes,
+power transitions, root replacement, bootstrap and Sileo remain disabled.
+

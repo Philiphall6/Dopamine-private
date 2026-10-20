@@ -12,12 +12,13 @@ from triage_agx_zero_packet_probe import render_compact as render_zero_compact
 from triage_agx_zero_packet_probe import triage as zero_triage
 
 
-REVISION = "self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1"
+REVISION = "self-page-write-v1+agx-notification-map-v3+rtkit-mmio-disabled-v1"
+PREVIOUS_REVISION = "self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1"
 LEGACY_REVISION = (
     "self-page-write-v1+agx-notification-bound-zero-packet-v1+"
     "rtkit-mmio-disabled-v1"
 )
-REVISIONS = frozenset((REVISION, LEGACY_REVISION))
+REVISIONS = frozenset((REVISION, PREVIOUS_REVISION, LEGACY_REVISION))
 REQUIRED = (
     ("titan.notification-binding", "START"),
     ("titan.notification-binding.array", "PASS"),
@@ -94,8 +95,10 @@ def triage(events: list[dict], run_id: str) -> dict:
     vtable = fields(vtable_event["detail"]) if vtable_event else {}
     empty = fields((_event(run, "titan.notification-binding.empty", "PASS") or {}).get(
         "detail", ""))
-    registry = fields((_event(run, "titan.notification-binding.registry", "PASS") or {}).get(
-        "detail", ""))
+    registry_pass = _event(run, "titan.notification-binding.registry", "PASS")
+    registry_blocked = _event(run, "titan.notification-binding.registry", "BLOCKED")
+    registry_event = registry_pass or registry_blocked
+    registry = fields((registry_event or {}).get("detail", ""))
     link = fields((_event(run, "titan.notification-binding.link", "PASS") or {}).get(
         "detail", ""))
     stable = fields((_event(run, "titan.notification-binding", "PASS") or {}).get(
@@ -122,7 +125,7 @@ def triage(events: list[dict], run_id: str) -> dict:
     )
     relationship_ok = bool(
         empty.get("derived") == "0x0" and empty.get("object") == "0x0" and
-        _number(registry, "length") == 0x2000 and
+        _number(registry, "length") == 0x2454 and
         _number(link, "derived") not in {None, 0} and
         link.get("notification") == link.get("expected") and
         stable.get("notification") == "same" and
@@ -136,6 +139,12 @@ def triage(events: list[dict], run_id: str) -> dict:
         report["selector25_call"]["attempts"] == 0 and
         vtable.get("unslid") not in {None, vtable.get("expected")}
     )
+    map_length_mismatch = bool(
+        create_ok and vtable_pass and registry_blocked and bind_attempts == 0 and
+        report["selector25_call"]["attempts"] == 0 and
+        _number(registry, "length") == 0x2454 and
+        _number(registry, "expected") == 0x2000
+    )
     report["notification_binding_ok"] = binding_ok
     report["selector14_attempts"] = create_attempts
     report["selector24_attempts"] = bind_attempts
@@ -143,6 +152,11 @@ def triage(events: list[dict], run_id: str) -> dict:
         "status": vtable_event["status"] if vtable_event else "MISSING",
         "observed": vtable.get("unslid", "missing"),
         "expected": vtable.get("expected", "missing"),
+    }
+    report["notification_map_length"] = {
+        "status": registry_event["status"] if registry_event else "MISSING",
+        "observed": registry.get("length", "missing"),
+        "expected": registry.get("expected", "missing"),
     }
     report["notification_id"] = numbered(create_pass["detail"], "id") if create_pass else None
     report["notification_derived"] = link.get("derived", "missing")
@@ -156,6 +170,8 @@ def triage(events: list[dict], run_id: str) -> dict:
         report["verdict"] = "agx_notification_binding_observed"
     elif vtable_mismatch:
         report["verdict"] = "notification_queue_vtable_mismatch_before_bind"
+    elif map_length_mismatch:
+        report["verdict"] = "notification_queue_map_length_mismatch_before_bind"
     else:
         report["verdict"] = "incomplete_or_blocked"
     report["limits"] = (
@@ -177,6 +193,9 @@ def render_compact(report: dict) -> str:
         f"notification_vtable: {report['notification_queue_vtable']['status']} "
         f"observed={report['notification_queue_vtable']['observed']} "
         f"expected={report['notification_queue_vtable']['expected']}\n"
+        f"notification_map_length: {report['notification_map_length']['status']} "
+        f"observed={report['notification_map_length']['observed']} "
+        f"expected={report['notification_map_length']['expected']}\n"
         + render_zero_compact(report)
     )
 
