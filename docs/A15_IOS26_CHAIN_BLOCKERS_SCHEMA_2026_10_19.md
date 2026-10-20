@@ -7,8 +7,11 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
    |
 [RUNTIME PASS] Owned AGX mapping, kernel alias and same-client queue
    |
-[STATIC PASS / SOURCE READY] Correct G14P selector-25 ABI
-   |    selector 25, four scalars, 0x40-byte record
+[RUNTIME PASS] Correct G14P selector-25 wrapper ABI
+   |    selector 25 accepted four scalars and the 0x40-byte record contract
+   |
+[STATIC PASS / SOURCE READY] IOGPU notification prerequisite
+   |    selector 14 creates 256 x 32 bytes; selector 24 binds queue+0x428/+0x430
    |
 [STATIC PASS] MDSID packet route and low-VA GXF-TTBR0 binding
    |
@@ -28,16 +31,19 @@ Exact target: iPhone14,2, build 23A355. Updated 2026-10-20.
    |
 [STATIC PASS] Command 3 -> current-context registered root -> TTBR0_EL1
    |
-[BLOCKER 1] Deterministic app-side power transition
+[BLOCKER 1] Bound empty selector-25 call and cleanup
+   |    ABI v3 returned 0xe00002bc before backend because queue+0x428 was null
+   |
+[BLOCKER 2] Deterministic app-side power transition
    |    Must request normal power and keep queue/context alive
    |
-[BLOCKER 2] Owned cloned-root acceptance
+[BLOCKER 3] Owned cloned-root acceptance
    |    Firmware must accept owned DRAM as the registered root frame
    |
-[BLOCKER 3] Corrected selector-25/MDSID runtime transport
-   |    0x38 was rejected; v2 stopped before call on live 0x40 contract
+[BLOCKER 4] Nonempty selector-25/MDSID runtime transport
+   |    Allowed only after the bound empty-record call and cleanup pass
    |
-[BLOCKER 4] Safe rollback
+[BLOCKER 5] Safe rollback
    |    Restore registry entry, trigger command 3 again, verify live TTBR0
    |
 [BLOCKED] Stable physical write independently observed and restored
@@ -68,9 +74,10 @@ entry and later exercise a low virtual address through the cloned root.
 
 ## Current decision
 
-This is now a coherent static physical-write candidate, not a working
-jailbreak. The direct G14P RTBuddy-to-firmware lifecycle is pinned and does not
-touch the user-client queue registry in its direct path, but runtime survival
-is not yet observed. The next useful IPA is exactly one corrected selector-25
-G14P `0x40` contract probe. A power-transition observation comes only after that
-call is accepted; root replacement and protected writes remain disabled.
+This is a coherent static physical-write candidate, not a working jailbreak.
+ABI v3 closed the record-size question and exposed the ordinary notification
+prerequisite before any backend or parser work. The next useful IPA creates and
+binds exactly one notification queue, validates the resulting kernel relations,
+then performs one empty selector-25 call. A power-transition observation comes
+only after that call is accepted; nonempty packets, root replacement and
+protected writes remain disabled.

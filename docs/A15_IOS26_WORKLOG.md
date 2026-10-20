@@ -1730,5 +1730,42 @@ The compiled `_titan_probe_zero_packet_once` function reads offset `0x268`,
 compares the live value against `0x40`, builds an exact `0x40`-byte structure,
 selects external method `0x19` and contains exactly one branch to the
 `_IOConnectCallMethod` stub. The artifact is promoted only to one bounded
-target run. No device run has yet been made with ABI v3.
+target run; the result of that run is recorded in the next entry.
+
+### 2026-10-20: ABI v3 reached the notification prerequisite
+
+ABI v3 ran once on iPhone14,2/23A355 without a restart. The live record-size
+check passed at `0x40/0x40`, and selector 25 was called exactly once. It
+returned `0xe00002bc`; pre/post firmware-pool digests were identical and the
+queue backend, status, flags, count, dispatch, command index and all tracked
+object identities remained unchanged. Cleanup and connection close passed.
+
+The exact batch routine explains the result without another device guess. It
+loads `queue+0x428` before backend allocation or parsing and returns its default
+`0xe00002bc` when that pointer is null. ABI v3 never created or bound the normal
+IOGPU notification queue, so the backend and parser were not reached.
+
+Static wrappers and the setter now pin the missing prerequisite: selector 14
+creates 256 entries of 32 bytes, returns a `0x10` output and registers the
+`IOGPUNotificationQueue` under `client-table+0x90`; selector 24 stores the
+derived object at `queue+0x428` and the notification object through
+`queue+0x430`. The exact notification vtable is `0xfffffff007e42f28`.
+
+### 2026-10-20: notification-bound v4 source prepared offline
+
+Revision
+`self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1`
+adds one selector-14 creation and one selector-24 bind before the existing
+single selector-25 boundary. It validates the empty pre-state, registry array,
+notification object and memory map, post-bind `queue+0x428/+0x430` relations,
+and binding stability after selector 25. Connection close remains the cleanup
+owner; retries, nonempty records, MMIO, physical writes and protected writes
+remain disabled.
+
+The offline exact-image audit passes and now reports both the observed unbound
+status `0xe00002bc` and the statically predicted linked path. The complete
+Python suite has 297 passing tests, including dedicated v4 triage tests and
+integration checks that enforce exactly one selector 14, one selector 24 and
+at most one selector 25. Private CI, compiled IPA inspection and the single
+bounded phone run remain pending.
 

@@ -52,6 +52,7 @@ from audit_agx_submit_boundary import (
     EXPECTED_EMPTY_PACKET_PATH,
     EXPECTED_MDSID_COMMAND_ROUTE,
     EXPECTED_NONEMPTY_PACKET_CONTROL,
+    EXPECTED_NOTIFICATION_BINDING,
     EXPECTED_SUBMIT_RECORD_CONTRACT,
     EXPECTED_OLD_SELECTOR_0,
     EXPECTED_PACKET_OVERRIDE,
@@ -116,6 +117,7 @@ from audit_agx_submit_boundary import (
     verify_firmware_callback_candidate,
     verify_live_queue_link,
     verify_nonempty_mdsid_route,
+    verify_notification_prerequisite,
     verify_queue_packet_route,
 )
 from audit_agx_uat_dispatch import IOGPU_SELECTOR_0_ENTRIES
@@ -279,8 +281,24 @@ class SubmitBoundaryTests(unittest.TestCase):
                          ["+0x0", "+0x4"])
         self.assertEqual(result["invalid_required_object_status"], 9)
         self.assertTrue(result["zero_count_finalizer_cleanup_without_status_error"])
-        self.assertEqual(result["predicted_bounded_probe_status"], 0)
-        self.assertEqual(len(result["predicted_bounded_probe_path"]), 6)
+        self.assertEqual(result["predicted_bounded_probe_status"], 0xe00002bc)
+        self.assertEqual(len(result["predicted_bounded_probe_path"]), 3)
+        self.assertEqual(result["predicted_linked_probe_status"], 0)
+        self.assertEqual(len(result["predicted_linked_probe_path"]), 8)
+
+    def test_notification_binding_closes_queue_428_prerequisite(self):
+        iogpu = SimpleNamespace(
+            instruction_at=lambda address: instruction(
+                address, *EXPECTED_NOTIFICATION_BINDING[address]
+            ),
+        )
+        result = verify_notification_prerequisite(iogpu)
+        self.assertEqual(result["create_selector"], 14)
+        self.assertEqual(result["bind_selector"], 24)
+        self.assertEqual(result["command_queue_derived_field"], "+0x428")
+        self.assertEqual(result["missing_field_return"], "0xe00002bc")
+        self.assertFalse(result["missing_field_reaches_backend"])
+        self.assertFalse(result["missing_field_reaches_parser"])
 
     def test_nonempty_control_buffer_routes_0x10002_to_mdsid_handler(self):
         agx_slots = {

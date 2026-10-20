@@ -12,8 +12,10 @@ but the effect has not yet been exercised safely on the device.
 [RUNTIME PASS] ClearSword kernel read/write
   -> [RUNTIME PASS] reversible kernel-alias write to an app-owned page
   -> [RUNTIME PASS] owned AGX client, shared buffer and same-client queue
+  -> [RUNTIME PASS] selector-25 G14P wrapper ABI
+       selector 25, four scalars, live record size 0x40
   -> [STATIC PASS / SOURCE ADAPTED / DEVICE PENDING]
-       selector-25 G14P ABI: selector 25, four scalars, record size 0x40
+       selector 14 notification create -> selector 24 bind -> queue+0x428/+0x430
   -> [STATIC PASS] MDSID packet 0x0e reaches the firmware handler
   -> [STATIC PASS] low target VA resolves through active GXF TTBR0
   -> [STATIC PASS] BEE7 exposes the active root fields read-only
@@ -28,7 +30,8 @@ but the effect has not yet been exercised safely on the device.
   -> [RUNTIME BLOCKER] deterministic app-side power assertion and timing
   -> [RUNTIME BLOCKER] owned queue/context survives one normal transition
   -> [RUNTIME BLOCKER] owned 16 KiB cloned root accepted by firmware
-  -> [RUNTIME BLOCKER] selector-25/MDSID write accepted with corrected ABI
+  -> [RUNTIME BLOCKER] bound empty selector-25 record accepted and cleaned up
+  -> [RUNTIME BLOCKER] nonempty selector-25/MDSID write accepted
   -> [RUNTIME BLOCKER] registry and live-TTBR0 rollback proven
   -> [BLOCKED] stable physical write independently observed
   -> [BLOCKED] protected-state/SPTM policy bypass
@@ -73,7 +76,9 @@ context survival still require one bounded runtime observation.
 |---|---|---|
 | Kernel foothold | RUNTIME PASS | None for this stage |
 | AGX object identity and owned queue | RUNTIME PASS | Packet consumption remains separate |
-| Selector-25 ABI | STATIC PASS / DEVICE PENDING | One accepted `0x40` record and cleanup observation |
+| Selector-25 ABI | RUNTIME PASS | Wrapper accepted the `0x40` contract; batch reached its missing-notification gate |
+| Notification create/bind | STATIC PASS / SOURCE READY | One selector-14/24 run and stable `queue+0x428/+0x430` relations |
+| Bound empty selector-25 call | DEVICE PENDING | One accepted record and cleanup observation |
 | MDSID-to-GXF-TTBR0 binding | STATIC PASS | Runtime packet transport and an owned target readback |
 | Active-root discovery through BEE7 | STATIC PASS / RUNTIME PENDING | Confirm both returned roots on-device without mutation |
 | RTBuddy class-`0xb` producer | STATIC PASS | Deterministic app-visible transition and lifecycle |
@@ -103,16 +108,18 @@ context survival still require one bounded runtime observation.
    the registered-root TTBR0 reload.
 4. DONE: pin the G14P RTBuddy transition wrapper, gated state change and exact
    live firmware-vtable slots without invoking them.
-5. NEXT: build and run exactly one corrected selector-25 G14P `0x40` record probe;
-   it must stop after acceptance/rejection and cleanup observation.
-6. NEXT: define one normal app-side power-assertion observation with exact
+5. DONE: run ABI v3 once; it returned `0xe00002bc` with unchanged state because
+   the command queue had no notification binding at `+0x428`.
+6. NEXT: build and run one notification-bound empty selector-25 probe; it must
+   use selectors 14/24 once each and selector 25 at most once.
+7. NEXT: define one normal app-side power-assertion observation with exact
    queue, buffer, context and registered-root stability checks.
-7. NEXT: define cloned-root construction from the live root without inventing
+8. NEXT: define cloned-root construction from the live root without inventing
    attribute bits, plus registry and live-TTBR0 rollback.
 
-The selector-25 probe in step 5 is the only currently justified IPA. It does
-not install a root, force a power transition, perform MMIO, or attempt a
-protected-memory write.
+The notification-bound selector-25 probe in step 6 is the only currently
+justified IPA. It does not install a root, force a power transition, perform
+MMIO, submit a nonempty command, or attempt a protected-memory write.
 
 Machine-readable evidence:
 
@@ -125,7 +132,9 @@ Machine-readable evidence:
 
 ## Honest progress assessment
 
-The route no longer stops at an unidentified post-GFX bridge. Active-root
+The route no longer stops at an unidentified post-GFX bridge, and the first
+selector-25 runtime rejection is now explained by an exact pre-backend gate.
+Active-root
 discovery, low-VA MDSID binding, the host class-`0xb` producer, firmware power
 state dispatch, command 3 and TTBR0 reload are all statically linked on the
 exact 23A355 images. The remaining gap is still significant: no owned root has

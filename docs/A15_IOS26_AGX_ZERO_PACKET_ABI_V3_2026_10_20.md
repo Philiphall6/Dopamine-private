@@ -50,3 +50,12 @@ Its compiled Titan function reads `device+0x268`, compares against `0x40`,
 sets the structure size to `0x40`, selects method 25 and contains exactly one
 branch to the `_IOConnectCallMethod` stub. It is ready for one bounded target
 run only.
+
+## Device result
+
+The one permitted run completed without a restart. The live `0x40` contract
+passed and selector 25 returned `0xe00002bc`; all tracked pool, queue and object
+state remained unchanged. Exact-image control flow identifies this as the
+pre-backend `queue+0x428 == 0` notification-binding gate. ABI v3 is retired and
+must not be rerun. The bounded successor is documented in
+`A15_IOS26_AGX_NOTIFICATION_BINDING_V1_2026_10_20.md`.

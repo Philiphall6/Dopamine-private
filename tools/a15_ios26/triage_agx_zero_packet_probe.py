@@ -15,6 +15,7 @@ from triage_agx_packet_route_identity_probe import triage as route_triage
 
 REVISION = "self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1"
 RECORD_SIZE = 0x40
+EARLY_GATE_KR = 0xE00002BC
 REQUIRED = (
     ("titan.zero-packet", "START"),
     ("titan.zero-packet.command-buffer", "PASS"),
@@ -42,6 +43,14 @@ REQUIRED = (
     ("titan.zero-packet.postflight", "PASS"),
     ("titan.zero-packet", "PASS"),
     ("titan.zero-packet", "STOP"),
+)
+
+EARLY_GATE_REQUIRED = tuple(
+    (stage, "BLOCKED") if (stage, status) in {
+        ("titan.zero-packet.call", "PASS"),
+        ("titan.zero-packet", "PASS"),
+    } else (stage, status)
+    for stage, status in REQUIRED
 )
 
 
@@ -85,12 +94,13 @@ def render_compact(report: dict) -> str:
         f'dispatch={queue["dispatch_before"]}->{queue["dispatch_after"]}',
         f'cleanup: pool={cleanup["pool_restored"]} queue={cleanup["queue_stable"]} '
         f'backend={cleanup["backend"]}',
+        f'notification_gate: {report["notification_binding_prerequisite"]}',
         f'first_blocked: {blocked_text}',
     )) + "\n"
 
 
-def triage(events: list[dict], run_id: str) -> dict:
-    report = route_triage(events, run_id, revision=REVISION)
+def triage(events: list[dict], run_id: str, revision: str = REVISION) -> dict:
+    report = route_triage(events, run_id, revision=revision)
     run = [event for event in events if event["run_id"] == run_id]
     sequence = [(event["stage"], event["status"]) for event in run]
 
@@ -103,9 +113,20 @@ def triage(events: list[dict], run_id: str) -> dict:
     except ValueError:
         pass
 
+    early_gate_ordered = False
+    try:
+        position = sequence.index(("titan.packet-route-identity", "STOP")) + 1
+        for checkpoint in EARLY_GATE_REQUIRED:
+            position = sequence.index(checkpoint, position) + 1
+        early_gate_ordered = True
+    except ValueError:
+        pass
+
     call_start_count = sequence.count(("titan.zero-packet.call", "START"))
     call_pass_count = sequence.count(("titan.zero-packet.call", "PASS"))
-    call = detail(run, "titan.zero-packet.call")
+    call_blocked_count = sequence.count(("titan.zero-packet.call", "BLOCKED"))
+    call_event = _checkpoint(run, "titan.zero-packet.call")
+    call = call_event["detail"] if call_event else ""
     call_ok = bool(
         call_start_count == call_pass_count == 1 and
         numbered(call, "kr") == 0 and
@@ -169,8 +190,16 @@ def triage(events: list[dict], run_id: str) -> dict:
         ordered and report.get("packet_route_identity_ok") and record_ok and call_ok and
         buffer_ok and pool_ok and queue_ok and identities_ok
     )
+    early_gate_ok = bool(
+        early_gate_ordered and report.get("packet_route_identity_ok") and record_ok and
+        call_start_count == call_blocked_count == 1 and call_pass_count == 0 and
+        numbered(call, "kr") == EARLY_GATE_KR and
+        numbered(call, "output-count") == 1 and numbered(call, "output") == 0 and
+        fields(call).get("attempt") == "1/1" and buffer_ok and pool_ok and
+        queue_ok and identities_ok
+    )
     report["zero_packet_observation_ok"] = zero_ok
-    call_event = _checkpoint(run, "titan.zero-packet.call")
+    report["notification_binding_prerequisite_observed"] = early_gate_ok
     call_fields = fields(call_event["detail"]) if call_event else {}
     report["run_id"] = run_id
     report["record_contract_ok"] = record_ok
@@ -195,11 +224,18 @@ def triage(events: list[dict], run_id: str) -> dict:
         "backend": cleanup.get("backend", "missing"),
     }
     report["first_blocked_checkpoint"] = _first_blocked(run)
-    report["pool_digest"] = f"{before:#x}" if zero_ok else None
-    report["selector25_attempts"] = 1 if zero_ok else None
-    if report["verdict"] == "agx_packet_route_identity_observed":
-        report["verdict"] = ("agx_zero_packet_cleanup_observed" if zero_ok else
-                             "incomplete_or_blocked")
+    report["pool_digest"] = f"{before:#x}" if zero_ok or early_gate_ok else None
+    report["selector25_attempts"] = 1 if zero_ok or early_gate_ok else None
+    report["notification_binding_prerequisite"] = (
+        "queue+0x428 likely null; exact-image batch returns 0xe00002bc before backend/parser"
+        if early_gate_ok else "not established"
+    )
+    if zero_ok:
+        report["verdict"] = "agx_zero_packet_cleanup_observed"
+    elif early_gate_ok:
+        report["verdict"] = "agx_notification_binding_prerequisite_observed"
+    elif report["verdict"] == "agx_packet_route_identity_observed":
+        report["verdict"] = "incomplete_or_blocked"
     report["limits"] = (
         "Exactly one selector-25 call with an all-zero owned 16K buffer is checked. "
         "No nonempty record, GPU command dispatch, MMIO, physical write, protected-memory "

@@ -65,11 +65,14 @@ def main() -> int:
     with (ROOT / "Application/Dopamine/Info.plist").open("rb") as stream:
         app_info = plistlib.load(stream)
     require(app_info.get("A15ProbeRevision") ==
-            "self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1",
+            "self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1",
             "app Info.plist does not identify the MMIO-disabled revision")
     require(app_info.get("A15ProbeSafetyMode") == "no-gfx-mmio",
             "app Info.plist does not expose the MMIO safety mode")
     titan = (ROOT / "Application/Dopamine/Exploits/Titan/exploit/titan.m").read_text()
+    iogpu_header = (
+        ROOT / "Application/Dopamine/Exploits/Titan/exploit/IOGPUDevice.h"
+    ).read_text()
     ipc_port = (
         ROOT / "Application/Dopamine/Exploits/Titan/exploit/ipc_port.c"
     ).read_text()
@@ -504,7 +507,7 @@ def main() -> int:
     ):
         require(marker in ipc_port, f"bounded IPC census is missing marker: {marker}")
     require(
-        "revision=self-page-write-v1+agx-zero-packet-abi-v3+rtkit-mmio-disabled-v1" in jailbreaker,
+        "revision=self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1" in jailbreaker,
         "active probe entry does not identify the MMIO-disabled build",
     )
     queue_probe_start = titan.find('titan_checkpoint(@"titan.self-gpu.queue-selector", @"START"')
@@ -615,15 +618,18 @@ def main() -> int:
     backend_slot_start = titan.find("static bool titan_probe_backend_code_slot(")
     backend_start = titan.find("static int titan_probe_backend_identity(uint64_t device)")
     packet_route_start = titan.find("static int titan_probe_packet_route_identity(")
+    notification_binding_start = titan.find("static int titan_probe_notification_binding(")
     zero_packet_start = titan.find("static int titan_probe_zero_packet_once(")
     shared_end = titan.find("static int titan_resolve_ios26_iorvbar_mapping(void)",
                             shared_start)
-    require(0 <= backend_slot_start < backend_start < packet_route_start < zero_packet_start <
-            owned_queue_start < shared_start < shared_end,
+    require(0 <= backend_slot_start < backend_start < packet_route_start <
+            notification_binding_start < zero_packet_start < owned_queue_start <
+            shared_start < shared_end,
             "bounded own-client alias probe is missing")
     slot_body = titan[backend_slot_start:backend_start]
     backend_body = titan[backend_start:packet_route_start]
-    packet_route_body = titan[packet_route_start:zero_packet_start]
+    packet_route_body = titan[packet_route_start:notification_binding_start]
+    notification_binding_body = titan[notification_binding_start:zero_packet_start]
     zero_packet_body = titan[zero_packet_start:owned_queue_start]
     for marker in (
         "kIOS2601AGXBlockFenceMetaGlobal = 0xfffffff00ab5d6d0ULL",
@@ -685,6 +691,44 @@ def main() -> int:
             "packet route identity gates are missing or out of order")
     require("kIOS2601AGXSubmitRecordSize = 0x40" in titan,
             "zero-packet observation does not use the live G14P 0x40 ABI")
+    require("IOGPU_IOS26_SUBMIT_RECORD_SIZE               (0x40)" in iogpu_header,
+            "shared IOGPU helper does not use the live G14P 0x40 ABI")
+    for marker in (
+        "kIOS2601IOGPUNotificationQueueVtable = 0xfffffff007e42f28ULL",
+        "kIOS2601AGXNotificationEntries = 256",
+        "kIOS2601AGXNotificationEntrySize = 32",
+        "kIOS2601AGXNotificationBytes = 0x2000",
+        'titan.notification-binding.queue-derived-before',
+        'titan.notification-binding.queue-object-before',
+        'IOConnectCallMethod(connection, 14,',
+        'titan.notification-binding.object-vtable',
+        'titan.notification-binding.map-address',
+        'titan.notification-binding.map-length',
+        'IOConnectCallScalarMethod(connection, 24,',
+        'titan.notification-binding.queue-derived-repeat',
+        'titan.notification-binding.queue-object',
+        'titan.notification-binding.derived-vtable-repeat',
+        'titan.notification-binding.object-final',
+        'titan.notification-binding", @"STOP"',
+    ):
+        require(marker in notification_binding_body or marker in titan,
+                f"notification binding prerequisite is missing: {marker}")
+    for forbidden in ("IOConnectCallMethod(connection, 25", "IOServiceOpen(",
+                      "IOGPU_submit_command_buffers(", "gfx_reset(",
+                      "task_copy_ipc_entry(", "kwrite", "kmap("):
+        require(forbidden not in notification_binding_body,
+                f"notification binding prerequisite contains forbidden call: {forbidden}")
+    require(notification_binding_body.count('IOConnectCallMethod(connection, 14,') == 1 and
+            notification_binding_body.count('IOConnectCallScalarMethod(connection, 24,') == 1,
+            "notification queue creation and bind must each occur exactly once")
+    require(0 <= notification_binding_body.find('titan.notification-binding.empty') <
+            notification_binding_body.find('IOConnectCallMethod(connection, 14,') <
+            notification_binding_body.find('titan.notification-binding.object-vtable') <
+            notification_binding_body.find('titan.notification-binding.registry') <
+            notification_binding_body.find('IOConnectCallScalarMethod(connection, 24,') <
+            notification_binding_body.find('titan.notification-binding.link') <
+            notification_binding_body.find('titan.notification-binding",\n                     stable ? @"PASS"'),
+            "notification identity, creation, bind, and post-bind gates are out of order")
     for marker in (
         'titan.zero-packet.buffer-preflight',
         'titan.zero-packet.pool-before-repeat',
@@ -701,6 +745,8 @@ def main() -> int:
         'titan.zero-packet.command-buffer-final',
         'titan.zero-packet.firmware-final',
         'titan.zero-packet.buffer-final',
+        'titan.zero-packet.notification-binding',
+        'titan.zero-packet.notification-binding-final',
         'titan.zero-packet.postflight',
         '@"attempts=1; connection cleanup follows"',
     ):
@@ -724,6 +770,10 @@ def main() -> int:
             zero_packet_body.find('titan.zero-packet.postflight') <
             zero_packet_body.find('titan.zero-packet", complete ? @"PASS"'),
             "zero-packet preflight, one call, and postflight are out of order")
+    require(0 <= zero_packet_body.find('titan.zero-packet.notification-binding') <
+            zero_packet_body.find('IOConnectCallMethod(connection, 25,') <
+            zero_packet_body.find('titan.zero-packet.notification-binding-final'),
+            "selector 25 must remain between stable notification binding reads")
     owned_queue_body = titan[owned_queue_start:shared_start]
     for marker in (
         'kIOS2601AGXCommandQueueVtable = 0xfffffff007b17550ULL',
@@ -747,6 +797,7 @@ def main() -> int:
         'titan.own-queue.firmware-read',
         'if (titan_probe_backend_identity(device) != 0)',
         'if (titan_probe_packet_route_identity(queue, device, firmware, rawVtable) != 0)',
+        'if (titan_probe_notification_binding(connection, table, queue, output.id) != 0)',
         'if (titan_probe_zero_packet_once(connection, queue, device, firmware,',
     ):
         require(marker in titan, f"owned queue probe is missing: {marker}")
@@ -769,6 +820,7 @@ def main() -> int:
             owned_queue_body.find('titan.own-queue.firmware-read", @"PASS"') <
             owned_queue_body.find('if (titan_probe_backend_identity(device) != 0)') <
             owned_queue_body.find('if (titan_probe_packet_route_identity(queue, device, firmware, rawVtable) != 0)') <
+            owned_queue_body.find('if (titan_probe_notification_binding(connection, table, queue, output.id) != 0)') <
             owned_queue_body.find('if (titan_probe_zero_packet_once(connection, queue, device, firmware,') <
             owned_queue_body.find('titan.own-queue", @"PASS"'),
             "firmware and backend identity reads must follow same-client gate and precede bounded stop")

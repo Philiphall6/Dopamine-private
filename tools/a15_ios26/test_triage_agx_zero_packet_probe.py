@@ -113,6 +113,26 @@ class ZeroPacketTriageTests(unittest.TestCase):
         self.assertIn("selector25: status=BLOCKED kr=0xe00002c2", compact)
         self.assertIn("first_blocked: titan.zero-packet.call", compact)
 
+    def test_v3_generic_error_identifies_missing_notification_binding(self):
+        run = complete_run()
+        call = next(item for item in run if item["stage"] ==
+                    "titan.zero-packet.call" and item["status"] == "PASS")
+        call["status"] = "BLOCKED"
+        call["detail"] = "kr=0xe00002bc output-count=1 output=0x0 attempt=1/1"
+        packet = next(item for item in run if item["stage"] ==
+                      "titan.zero-packet" and item["status"] == "PASS")
+        packet["status"] = "BLOCKED"
+        packet["detail"] = "bounded selector 25 observation did not close cleanly"
+        report = triage(run, "run-a")
+        self.assertEqual(report["verdict"],
+                         "agx_notification_binding_prerequisite_observed")
+        self.assertTrue(report["notification_binding_prerequisite_observed"])
+        self.assertEqual(report["selector25_attempts"], 1)
+        self.assertIn("queue+0x428 likely null",
+                      report["notification_binding_prerequisite"])
+        self.assertIn("notification_gate: queue+0x428 likely null",
+                      render_compact(report))
+
 
 if __name__ == "__main__":
     unittest.main()

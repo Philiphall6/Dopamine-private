@@ -35,7 +35,7 @@ class TitanIOS26CommandABITests(unittest.TestCase):
         )
         self.assertRegex(
             self.header,
-            r"IOGPU_IOS26_SUBMIT_RECORD_SIZE\s+\(0x30\)",
+            r"IOGPU_IOS26_SUBMIT_RECORD_SIZE\s+\(0x40\)",
         )
 
     def test_only_known_ios26_selectors_shift(self) -> None:

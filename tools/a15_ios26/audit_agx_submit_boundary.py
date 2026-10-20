@@ -98,6 +98,50 @@ BLOCK_FENCE_FREE_SLOT = BLOCK_FENCE_INSTANCE_VTABLE + 0x70
 BLOCK_FENCE_FREE_ENCODING = 0x8011edc5017f20d8
 BLOCK_FENCE_FREE = 0xfffffff0087f60d8
 
+NOTIFICATION_CREATE_WRAPPER = 0xfffffff009f1ab60
+NOTIFICATION_CREATE = 0xfffffff009f38ac0
+NOTIFICATION_BIND_WRAPPER = 0xfffffff009f1ac24
+NOTIFICATION_BIND = 0xfffffff009f490f4
+NOTIFICATION_QUEUE_FIELD = 0x428
+NOTIFICATION_OBJECT_SLOT_FIELD = 0x430
+NOTIFICATION_MISSING_RETURN = 0xe00002bc
+
+EXPECTED_NOTIFICATION_BINDING = {
+    0xfffffff009f1ab64: ("ldr", "x0, [x0, #0x120]"),
+    0xfffffff009f1ab6c: ("ldr", "w1, [x8]"),
+    0xfffffff009f1ab70: ("ldr", "w8, [x8, #8]"),
+    0xfffffff009f1ab74: ("ldr", "x3, [x2, #0x58]"),
+    0xfffffff009f1ab7c: ("b", "#0xfffffff009f38ac0"),
+    0xfffffff009f38afc: ("ldr", "x0, [x0, #0x50]"),
+    0xfffffff009f38b00: ("bl", "#0xfffffff009f555f0"),
+    0xfffffff009f38b0c: ("ldr", "x0, [x21, #0x90]"),
+    0xfffffff009f38b14: ("bl", "#0xfffffff009f17f08"),
+    0xfffffff009f38b1c: ("str", "w0, [x19, #8]"),
+    0xfffffff009f38b28: ("str", "x0, [x19]"),
+    0xfffffff009f1ac48: ("ldr", "w1, [x8]"),
+    0xfffffff009f1ac4c: ("ldr", "w22, [x8, #8]"),
+    0xfffffff009f1ac54: ("bl", "#0xfffffff009f38aa8"),
+    0xfffffff009f1ac64: ("bl", "#0xfffffff009f38ab4"),
+    0xfffffff009f1ac7c: ("bl", "#0xfffffff009f490f4"),
+    0xfffffff009f49124: ("ldr", "x8, [x19, #0x430]"),
+    0xfffffff009f49128: ("ldr", "x8, [x8]"),
+    0xfffffff009f4912c: ("cbz", "x8, #0xfffffff009f49164"),
+    0xfffffff009f49168: ("bl", "#0xfffffff009f217f8"),
+    0xfffffff009f4916c: ("str", "x0, [x19, #0x428]"),
+    0xfffffff009f49170: ("cbz", "x0, #0xfffffff009f491a8"),
+    0xfffffff009f49174: ("ldr", "x8, [x19, #0x430]"),
+    0xfffffff009f49178: ("str", "x21, [x8]"),
+    0xfffffff009f491a4: ("mov", "w20, #0"),
+    0xfffffff009f49280: ("mov", "w24, #0x2bc"),
+    0xfffffff009f49284: ("movk", "w24, #0xe000, lsl #16"),
+    0xfffffff009f492b4: ("ldr", "x8, [x19, #0x428]"),
+    0xfffffff009f492b8: ("cbz", "x8, #0xfffffff009f4942c"),
+    0xfffffff009f492bc: ("ldr", "x8, [x19, #0x490]"),
+    0xfffffff009f492c0: ("cbz", "x8, #0xfffffff009f4942c"),
+    0xfffffff009f4941c: ("mov", "w24, #0"),
+    0xfffffff009f494a8: ("mov", "x0, x24"),
+}
+
 SUBMIT_WRAPPER_EXPECTED = {
     0xfffffff009f1ae3c: ("ldr", "x0, [x22, #0x120]"),
     0xfffffff009f1ae40: ("bl", "#0xfffffff009f38aa8"),
@@ -768,8 +812,16 @@ def verify_queue_packet_route(agx: MachOImage, iogpu: MachOImage) -> dict:
         "zero_count_field": "control-buffer+0x8",
         "zero_count_finalizer_cleanup_without_status_error": True,
         "nonempty_format_error_status": 10,
-        "predicted_bounded_probe_status": 0,
+        "predicted_bounded_probe_status": NOTIFICATION_MISSING_RETURN,
         "predicted_bounded_probe_path": [
+            "selector-25 wrapper accepts the live G14P 0x40 record",
+            "batch sees queue+0x428 is null because no notification queue was bound",
+            "batch returns its default kIOReturnError before backend allocation and parsing",
+        ],
+        "predicted_linked_probe_status": 0,
+        "predicted_linked_probe_path": [
+            "selector-14 creates and registers one notification queue",
+            "selector-24 stores the derived queue object at command-queue+0x428",
             "selector-25 wrapper accepts the live G14P 0x40 record",
             "temporary AGXBlockFence backend is prepared",
             "two required owned buffer IDs resolve",
@@ -784,6 +836,28 @@ def verify_queue_packet_route(agx: MachOImage, iogpu: MachOImage) -> dict:
         "submit_record_size_field": "device+0x268",
         "queue_input_size_field": "device+0x278",
         "g14p_queue_input_size": "0x410",
+    }
+
+
+def verify_notification_prerequisite(iogpu: MachOImage) -> dict:
+    verify_instructions(iogpu, EXPECTED_NOTIFICATION_BINDING)
+    return {
+        "create_selector": 14,
+        "create_wrapper": f"{NOTIFICATION_CREATE_WRAPPER:#x}",
+        "create_target": f"{NOTIFICATION_CREATE:#x}",
+        "create_scalar_count": 2,
+        "create_structure_output_size": "0x10",
+        "registration_array": "client-table+0x90",
+        "bind_selector": 24,
+        "bind_wrapper": f"{NOTIFICATION_BIND_WRAPPER:#x}",
+        "bind_target": f"{NOTIFICATION_BIND:#x}",
+        "bind_scalar_count": 2,
+        "command_queue_derived_field": f"+{NOTIFICATION_QUEUE_FIELD:#x}",
+        "command_queue_notification_slot": f"+{NOTIFICATION_OBJECT_SLOT_FIELD:#x}",
+        "submit_requires_derived_field": True,
+        "missing_field_return": f"{NOTIFICATION_MISSING_RETURN:#x}",
+        "missing_field_reaches_backend": False,
+        "missing_field_reaches_parser": False,
     }
 
 
@@ -1054,6 +1128,7 @@ def audit(path: pathlib.Path, journal: pathlib.Path | None = None) -> dict:
     backend_cleanup = verify_block_fence_cleanup(agx, kernel, process)
     base_helper = verify_base_init_helper(image, kernel)
     queue_packet_route = verify_queue_packet_route(agx, image)
+    notification_prerequisite = verify_notification_prerequisite(image)
     nonempty_mdsid_route = verify_nonempty_mdsid_route(agx, image)
     command_buffer_callback = verify_command_buffer_callback(agx)
     firmware_callback_candidate = verify_firmware_callback_candidate(agx, kernel)
@@ -1085,6 +1160,7 @@ def audit(path: pathlib.Path, journal: pathlib.Path | None = None) -> dict:
             "complete_effects_bounded": False,
         },
         "observed_queue_packet_route": queue_packet_route,
+        "notification_binding_prerequisite": notification_prerequisite,
         "static_nonempty_mdsid_route": nonempty_mdsid_route,
         "static_command_buffer_callback": command_buffer_callback,
         "static_firmware_callback_candidate": firmware_callback_candidate,

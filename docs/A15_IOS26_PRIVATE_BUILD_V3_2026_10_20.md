@@ -31,10 +31,14 @@ Mach-O indirect symbol entry 0 maps stub `0x1abcc` to
 `_IOConnectCallMethod`. There is exactly one branch to that stub inside the
 probe function.
 
-## Promotion decision
+## Device result and retirement
 
-The IPA is promoted only to **one bounded device observation**. It validates
-the live `device+0x268` field twice, permits exactly one selector-25 call, then
-records cleanup state and stops. It is not a working jailbreak. Power-lifecycle
-survival, reversible root replacement, physical writes, SPTM/PAPT policy work,
-bootstrap and Sileo remain disabled or blocked.
+The one permitted observation completed without a restart. The live
+`device+0x268=0x40/0x40` contract passed and selector 25 returned
+`0xe00002bc`. Firmware-pool and queue snapshots stayed unchanged, the backend
+remained null, and cleanup plus connection close passed. Exact-image analysis
+places that return at the pre-backend `queue+0x428 == 0` notification gate.
+
+This IPA is retired and must not be rerun. It is not a working jailbreak.
+Power-lifecycle survival, reversible root replacement, physical writes,
+SPTM/PAPT policy work, bootstrap and Sileo remain disabled or blocked.
