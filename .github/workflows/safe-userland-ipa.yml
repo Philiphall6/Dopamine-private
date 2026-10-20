@@ -71,7 +71,7 @@ jobs:
       - name: Build BaseBin and packages
         run: |
           set -euo pipefail
-          gmake -C BaseBin
+          gmake -C BaseBin BUILD_STANDALONE=0
           gmake -C Packages
 
       - name: Build safe diagnostic IPA
