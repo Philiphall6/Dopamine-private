@@ -24,7 +24,7 @@ flowchart TD
     A[ClearSword kernel read/write<br/>RUNTIME PASS]
     B[Reversible app-owned page alias write<br/>RUNTIME PASS]
     C[Owned AGX client, shared buffer and queue<br/>RUNTIME PASS]
-    D[Selector 25 exact 0x30 record ABI<br/>STATIC PASS / DEVICE PENDING]
+    D[Selector 25 exact 0x30 record ABI<br/>STATIC PASS / IPA READY]
     E[MDSID packet and low-VA GXF TTBR0 route<br/>STATIC PASS]
     F[BEE7 active-root discovery<br/>STATIC PASS]
     G[16 KiB cloned-root format<br/>STATIC PASS]
@@ -61,6 +61,25 @@ submits one exact selector-25 record of `0x30` bytes, records pre/post state,
 and stops. It does not install a replacement root, force a power transition,
 perform GPU MMIO, write physical memory, or modify protected memory.
 
+Verified private build:
+
+| Field | Value |
+| --- | --- |
+| Source commit | `20e28f2d5dea8ac6c3737074575b4d55d92bed70` |
+| GitHub Actions run | [`39383221146`](https://github.com/Philiphall6/Dopamine-private/actions/runs/39383221146) (`success`) |
+| IPA SHA-256 | `8566FC2D517D7B144964005E9EB06DC18977D6B0ADAD3DDD863A2B2799F70806` |
+| Embedded revision | `self-page-write-v1+agx-zero-packet-abi-v2+rtkit-mmio-disabled-v1` |
+| Safety mode | `no-gfx-mmio` |
+| Probe marker | `titan.zero-packet.record-contract` |
+| Compiled ABI evidence | `device+0x268`, compare/record size `0x30`, selector `0x19` |
+| Call boundary | Exactly one `_IOConnectCallMethod` call in `_titan_probe_zero_packet_once` |
+| Device state | Ready for one bounded run; not yet accepted on device |
+
+The build is not a jailbreak release. Sileo and bootstrap deployment remain
+blocked behind selector-25 acceptance, power-lifecycle survival, reversible
+root replacement, a stable physical-write primitive and the SPTM/PAPT policy
+boundary.
+
 Deployment order:
 
 1. Trigger the private GitHub Actions workflow manually for one exact commit;
@@ -78,6 +97,7 @@ Deployment order:
 - Functional ledger: [`docs/A15_IOS26_OFFLINE_FUNCTIONAL_PATH_2026_10_19.md`](docs/A15_IOS26_OFFLINE_FUNCTIONAL_PATH_2026_10_19.md)
 - Blocker schema: [`docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md`](docs/A15_IOS26_CHAIN_BLOCKERS_SCHEMA_2026_10_19.md)
 - Detailed worklog: [`docs/A15_IOS26_WORKLOG.md`](docs/A15_IOS26_WORKLOG.md)
+- Verified private build: [`docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md`](docs/A15_IOS26_PRIVATE_BUILD_2026_10_20.md)
 - Power lifecycle audit: [`tools/a15_ios26/audit_agx_firmware_power_lifecycle.py`](tools/a15_ios26/audit_agx_firmware_power_lifecycle.py)
 
 Keep this section synchronized whenever a stage changes state or a new IPA is
