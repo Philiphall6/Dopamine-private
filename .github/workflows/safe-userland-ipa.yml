@@ -77,7 +77,10 @@ jobs:
       - name: Build safe diagnostic IPA
         run: |
           set -euo pipefail
-          export CPATH="$THEOS/sdks/iPhoneOS16.5.sdk/usr/include:${CPATH:-}"
+          compat_headers="$RUNNER_TEMP/compat-headers"
+          mkdir -p "$compat_headers/sys"
+          cp "$THEOS/sdks/iPhoneOS16.5.sdk/usr/include/sys/fileport.h" "$compat_headers/sys/fileport.h"
+          export CPATH="$compat_headers:${CPATH:-}"
           gmake -C Application SAFE_DIAGNOSTIC=1
 
       - name: Verify IPA contents
