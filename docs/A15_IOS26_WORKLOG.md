@@ -1749,7 +1749,8 @@ Static wrappers and the setter now pin the missing prerequisite: selector 14
 creates 256 entries of 32 bytes, returns a `0x10` output and registers the
 `IOGPUNotificationQueue` under `client-table+0x90`; selector 24 stores the
 derived object at `queue+0x428` and the notification object through
-`queue+0x430`. The exact notification vtable is `0xfffffff007e42f28`.
+`queue+0x430`. The v4 source initially used a provisional notification-vtable
+constant; its correction is recorded below.
 
 ### 2026-10-20: notification-bound v4 source prepared offline
 
@@ -1789,4 +1790,24 @@ MDSID packet is deliberately excluded: the notification-bound empty record
 must first prove that selector 25 reaches and releases the backend cleanly.
 Power transitions, MMIO, physical writes, protected writes, root replacement,
 bootstrap and Sileo remain disabled.
+
+### 2026-10-20: notification queue vtable corrected from a bounded v4 stop
+
+The single v4 device run completed selector 14 and returned notification ID `1`
+with a writable mapping. It stopped before selector 24 and selector 25 because
+the returned object had unslid vtable `0xfffffff007e479a8`, not the provisional
+`0xfffffff007e42f28`. The queue, buffer and phone remained stable; connection
+cleanup passed.
+
+The retained exact kernelcache independently resolves the selector-14 factory
+at `0xfffffff009f555f0`, its metaclass allocator slot
+`0xfffffff007e47ab0`, and allocator `0xfffffff009f554c4`. That allocator
+installs `0xfffffff007e479a8` as the instance vtable. The source and its static
+audit now use this value under revision
+`self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1`.
+
+This correction only enables the already bounded v4 sequence to reach its next
+guard: one selector 24 bind and at most one zero-record selector 25 call.
+Nonempty MDSID submission remains excluded pending a clean notification-bound
+empty-record observation.
 

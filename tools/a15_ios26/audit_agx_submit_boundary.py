@@ -105,6 +105,16 @@ NOTIFICATION_BIND = 0xfffffff009f490f4
 NOTIFICATION_QUEUE_FIELD = 0x428
 NOTIFICATION_OBJECT_SLOT_FIELD = 0x430
 NOTIFICATION_MISSING_RETURN = 0xe00002bc
+NOTIFICATION_QUEUE_CLASS_NAME = "IOGPUNotificationQueue"
+NOTIFICATION_QUEUE_CLASS_NAME_ADDRESS = 0xfffffff0076f6421
+NOTIFICATION_QUEUE_FACTORY = 0xfffffff009f555f0
+NOTIFICATION_QUEUE_METACLASS_GLOBAL = 0xfffffff00ac473f0
+NOTIFICATION_QUEUE_METACLASS_VTABLE = 0xfffffff007e47a48
+NOTIFICATION_QUEUE_ALLOC_SLOT = NOTIFICATION_QUEUE_METACLASS_VTABLE + 0x68
+NOTIFICATION_QUEUE_ALLOC_ENCODING = 0x8041160102f514c4
+NOTIFICATION_QUEUE_ALLOC = 0xfffffff009f554c4
+NOTIFICATION_QUEUE_INSTANCE_VTABLE = 0xfffffff007e479a8
+NOTIFICATION_QUEUE_INSTANCE_VTABLE_FIRST_ENTRY = 0x8011377102f51408
 
 EXPECTED_NOTIFICATION_BINDING = {
     0xfffffff009f1ab64: ("ldr", "x0, [x0, #0x120]"),
@@ -140,6 +150,20 @@ EXPECTED_NOTIFICATION_BINDING = {
     0xfffffff009f492c0: ("cbz", "x8, #0xfffffff009f4942c"),
     0xfffffff009f4941c: ("mov", "w24, #0"),
     0xfffffff009f494a8: ("mov", "x0, x24"),
+}
+
+EXPECTED_NOTIFICATION_QUEUE_FACTORY = {
+    0xfffffff009f38b00: ("bl", "#0xfffffff009f555f0"),
+    0xfffffff009f55610: ("adrp", "x0, #0xfffffff00ac47000"),
+    0xfffffff009f55614: ("add", "x0, x0, #0x3f0"),
+    0xfffffff009f55628: ("ldr", "x8, [x16, #0x68]!"),
+    0xfffffff009f554d4: ("adrp", "x0, #0xfffffff007e48000"),
+    0xfffffff009f554d8: ("add", "x0, x0, #0xc40"),
+    0xfffffff009f554dc: ("mov", "w1, #0x30"),
+    0xfffffff009f554f8: ("adrp", "x16, #0xfffffff007e47000"),
+    0xfffffff009f554fc: ("add", "x16, x16, #0x998"),
+    0xfffffff009f55500: ("add", "x16, x16, #0x10"),
+    0xfffffff009f55510: ("str", "x16, [x0]"),
 }
 
 SUBMIT_WRAPPER_EXPECTED = {
@@ -861,6 +885,35 @@ def verify_notification_prerequisite(iogpu: MachOImage) -> dict:
     }
 
 
+def verify_notification_queue_vtable(iogpu: MachOImage) -> dict:
+    if iogpu.read_cstring(NOTIFICATION_QUEUE_CLASS_NAME_ADDRESS) != \
+            NOTIFICATION_QUEUE_CLASS_NAME:
+        raise ValueError("notification queue class name changed")
+    verify_instructions(iogpu, EXPECTED_NOTIFICATION_QUEUE_FACTORY)
+    allocator = iogpu.read_u64(NOTIFICATION_QUEUE_ALLOC_SLOT)
+    allocator_target = KERNEL_STATIC_BASE + (allocator & 0xffffffff) if allocator else None
+    if (allocator, allocator_target) != (
+        NOTIFICATION_QUEUE_ALLOC_ENCODING,
+        NOTIFICATION_QUEUE_ALLOC,
+    ):
+        raise ValueError("notification queue metaclass allocator changed")
+    first_entry = iogpu.read_u64(NOTIFICATION_QUEUE_INSTANCE_VTABLE)
+    if first_entry != NOTIFICATION_QUEUE_INSTANCE_VTABLE_FIRST_ENTRY:
+        raise ValueError("notification queue instance vtable changed")
+    return {
+        "class_name": NOTIFICATION_QUEUE_CLASS_NAME,
+        "class_name_address": f"{NOTIFICATION_QUEUE_CLASS_NAME_ADDRESS:#x}",
+        "selector14_factory": f"{NOTIFICATION_QUEUE_FACTORY:#x}",
+        "metaclass_global": f"{NOTIFICATION_QUEUE_METACLASS_GLOBAL:#x}",
+        "metaclass_vtable": f"{NOTIFICATION_QUEUE_METACLASS_VTABLE:#x}",
+        "allocator_slot": f"{NOTIFICATION_QUEUE_ALLOC_SLOT:#x}",
+        "allocator_target": f"{allocator_target:#x}",
+        "instance_vtable": f"{NOTIFICATION_QUEUE_INSTANCE_VTABLE:#x}",
+        "instance_vtable_first_entry": f"{first_entry:#x}",
+        "factory_installs_instance_vtable": True,
+    }
+
+
 def verify_nonempty_mdsid_route(agx: MachOImage, iogpu: MachOImage) -> dict:
     entries = validate_indirect_entries(agx.read_u64, (
         ("queue-command-chunk-parser", QUEUE_CHUNK_PARSER_SLOT,
@@ -1129,6 +1182,7 @@ def audit(path: pathlib.Path, journal: pathlib.Path | None = None) -> dict:
     base_helper = verify_base_init_helper(image, kernel)
     queue_packet_route = verify_queue_packet_route(agx, image)
     notification_prerequisite = verify_notification_prerequisite(image)
+    notification_queue_identity = verify_notification_queue_vtable(image)
     nonempty_mdsid_route = verify_nonempty_mdsid_route(agx, image)
     command_buffer_callback = verify_command_buffer_callback(agx)
     firmware_callback_candidate = verify_firmware_callback_candidate(agx, kernel)
@@ -1161,6 +1215,7 @@ def audit(path: pathlib.Path, journal: pathlib.Path | None = None) -> dict:
         },
         "observed_queue_packet_route": queue_packet_route,
         "notification_binding_prerequisite": notification_prerequisite,
+        "notification_queue_identity": notification_queue_identity,
         "static_nonempty_mdsid_route": nonempty_mdsid_route,
         "static_command_buffer_callback": command_buffer_callback,
         "static_firmware_callback_candidate": firmware_callback_candidate,

@@ -53,6 +53,7 @@ from audit_agx_submit_boundary import (
     EXPECTED_MDSID_COMMAND_ROUTE,
     EXPECTED_NONEMPTY_PACKET_CONTROL,
     EXPECTED_NOTIFICATION_BINDING,
+    EXPECTED_NOTIFICATION_QUEUE_FACTORY,
     EXPECTED_SUBMIT_RECORD_CONTRACT,
     EXPECTED_OLD_SELECTOR_0,
     EXPECTED_PACKET_OVERRIDE,
@@ -92,6 +93,13 @@ from audit_agx_submit_boundary import (
     QUEUE_EMPTY_FINALIZER_SLOT,
     QUEUE_PRECHECK_ENCODING,
     QUEUE_PRECHECK_SLOT,
+    NOTIFICATION_QUEUE_ALLOC_ENCODING,
+    NOTIFICATION_QUEUE_ALLOC_SLOT,
+    NOTIFICATION_QUEUE_ALLOC,
+    NOTIFICATION_QUEUE_CLASS_NAME,
+    NOTIFICATION_QUEUE_CLASS_NAME_ADDRESS,
+    NOTIFICATION_QUEUE_INSTANCE_VTABLE,
+    NOTIFICATION_QUEUE_INSTANCE_VTABLE_FIRST_ENTRY,
     EXPECTED_AGX,
     PREPARE_BASE_GOT,
     PREPARE_BASE_GOT_ENCODING,
@@ -118,6 +126,7 @@ from audit_agx_submit_boundary import (
     verify_live_queue_link,
     verify_nonempty_mdsid_route,
     verify_notification_prerequisite,
+    verify_notification_queue_vtable,
     verify_queue_packet_route,
 )
 from audit_agx_uat_dispatch import IOGPU_SELECTOR_0_ENTRIES
@@ -299,6 +308,27 @@ class SubmitBoundaryTests(unittest.TestCase):
         self.assertEqual(result["missing_field_return"], "0xe00002bc")
         self.assertFalse(result["missing_field_reaches_backend"])
         self.assertFalse(result["missing_field_reaches_parser"])
+
+    def test_notification_queue_factory_pins_live_vtable(self):
+        iogpu = SimpleNamespace(
+            read_cstring=lambda address: NOTIFICATION_QUEUE_CLASS_NAME
+            if address == NOTIFICATION_QUEUE_CLASS_NAME_ADDRESS else None,
+            read_u64=lambda address: (
+                NOTIFICATION_QUEUE_ALLOC_ENCODING
+                if address == NOTIFICATION_QUEUE_ALLOC_SLOT else
+                NOTIFICATION_QUEUE_INSTANCE_VTABLE_FIRST_ENTRY
+                if address == NOTIFICATION_QUEUE_INSTANCE_VTABLE else None
+            ),
+            instruction_at=lambda address: instruction(
+                address, *EXPECTED_NOTIFICATION_QUEUE_FACTORY[address]
+            ),
+        )
+        result = verify_notification_queue_vtable(iogpu)
+        self.assertEqual(result["class_name"], NOTIFICATION_QUEUE_CLASS_NAME)
+        self.assertEqual(result["allocator_target"], f"{NOTIFICATION_QUEUE_ALLOC:#x}")
+        self.assertEqual(result["instance_vtable"],
+                         f"{NOTIFICATION_QUEUE_INSTANCE_VTABLE:#x}")
+        self.assertTrue(result["factory_installs_instance_vtable"])
 
     def test_nonempty_control_buffer_routes_0x10002_to_mdsid_handler(self):
         agx_slots = {

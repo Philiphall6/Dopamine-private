@@ -2,7 +2,13 @@ import unittest
 
 from test_triage_agx_iouat_object_probe import event
 from test_triage_agx_zero_packet_probe import complete_run as zero_run
-from triage_agx_notification_bound_probe import REQUIRED, REVISION, render_compact, triage
+from triage_agx_notification_bound_probe import (
+    LEGACY_REVISION,
+    REQUIRED,
+    REVISION,
+    render_compact,
+    triage,
+)
 from triage_agx_zero_packet_probe import REVISION as ZERO_REVISION
 
 
@@ -77,6 +83,31 @@ class NotificationBoundTriageTests(unittest.TestCase):
         bind["status"] = "BLOCKED"
         bind["detail"] = bind["detail"].replace("kr=0x0", "kr=0xe00002bc")
         self.assertEqual(triage(run, "run-a")["verdict"], "incomplete_or_blocked")
+
+    def test_vtable_mismatch_stops_before_bind_and_submit(self):
+        run = complete_run()
+        run[0]["detail"] = run[0]["detail"].replace(REVISION, LEGACY_REVISION)
+        start = next(index for index, item in enumerate(run) if
+                     (item["stage"], item["status"]) ==
+                     ("titan.notification-binding.object-vtable-identity", "PASS"))
+        end = next(index for index, item in enumerate(run) if
+                   (item["stage"], item["status"]) == ("titan.zero-packet", "START"))
+        run[start:end] = [event(
+            "titan.notification-binding.object-vtable-identity",
+            "BLOCKED",
+            "object=0xffffffe000200000 unslid=0xfffffff007e479a8 expected=0xfffffff007e42f28",
+        )]
+        zero_start = next(index for index, item in enumerate(run) if
+                          (item["stage"], item["status"]) ==
+                          ("titan.zero-packet", "START"))
+        del run[zero_start:]
+        report = triage(run, "run-a")
+        self.assertEqual(report["verdict"], "notification_queue_vtable_mismatch_before_bind")
+        self.assertEqual(report["selector14_attempts"], 1)
+        self.assertEqual(report["selector24_attempts"], 0)
+        self.assertEqual(report["selector25_call"]["attempts"], 0)
+        self.assertEqual(report["notification_queue_vtable"]["observed"],
+                         "0xfffffff007e479a8")
 
 
 if __name__ == "__main__":

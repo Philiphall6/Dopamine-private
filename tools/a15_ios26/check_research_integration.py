@@ -65,7 +65,7 @@ def main() -> int:
     with (ROOT / "Application/Dopamine/Info.plist").open("rb") as stream:
         app_info = plistlib.load(stream)
     require(app_info.get("A15ProbeRevision") ==
-            "self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1",
+            "self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1",
             "app Info.plist does not identify the MMIO-disabled revision")
     require(app_info.get("A15ProbeSafetyMode") == "no-gfx-mmio",
             "app Info.plist does not expose the MMIO safety mode")
@@ -507,7 +507,7 @@ def main() -> int:
     ):
         require(marker in ipc_port, f"bounded IPC census is missing marker: {marker}")
     require(
-        "revision=self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1" in jailbreaker,
+        "revision=self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1" in jailbreaker,
         "active probe entry does not identify the MMIO-disabled build",
     )
     queue_probe_start = titan.find('titan_checkpoint(@"titan.self-gpu.queue-selector", @"START"')
@@ -694,7 +694,7 @@ def main() -> int:
     require("IOGPU_IOS26_SUBMIT_RECORD_SIZE               (0x40)" in iogpu_header,
             "shared IOGPU helper does not use the live G14P 0x40 ABI")
     for marker in (
-        "kIOS2601IOGPUNotificationQueueVtable = 0xfffffff007e42f28ULL",
+        "kIOS2601IOGPUNotificationQueueVtable = 0xfffffff007e479a8ULL",
         "kIOS2601AGXNotificationEntries = 256",
         "kIOS2601AGXNotificationEntrySize = 32",
         "kIOS2601AGXNotificationBytes = 0x2000",

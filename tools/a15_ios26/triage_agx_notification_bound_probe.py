@@ -12,10 +12,12 @@ from triage_agx_zero_packet_probe import render_compact as render_zero_compact
 from triage_agx_zero_packet_probe import triage as zero_triage
 
 
-REVISION = (
+REVISION = "self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1"
+LEGACY_REVISION = (
     "self-page-write-v1+agx-notification-bound-zero-packet-v1+"
     "rtkit-mmio-disabled-v1"
 )
+REVISIONS = frozenset((REVISION, LEGACY_REVISION))
 REQUIRED = (
     ("titan.notification-binding", "START"),
     ("titan.notification-binding.array", "PASS"),
@@ -65,8 +67,12 @@ def _number(values: dict[str, str], key: str) -> int | None:
 
 
 def triage(events: list[dict], run_id: str) -> dict:
-    report = zero_triage(events, run_id, revision=REVISION)
     run = [event for event in events if event["run_id"] == run_id]
+    entry = _event(run, "probe.entry", "START")
+    entry_revision = fields(entry["detail"]).get("revision") if entry else None
+    report = zero_triage(events, run_id, revision=(
+        entry_revision if entry_revision in REVISIONS else REVISION
+    ))
     sequence = [(event["stage"], event["status"]) for event in run]
     ordered = False
     try:
@@ -82,6 +88,10 @@ def triage(events: list[dict], run_id: str) -> dict:
     create_pass = _event(run, "titan.notification-binding.create", "PASS")
     bind_start = _event(run, "titan.notification-binding.bind", "START")
     bind_pass = _event(run, "titan.notification-binding.bind", "PASS")
+    vtable_pass = _event(run, "titan.notification-binding.object-vtable-identity", "PASS")
+    vtable_blocked = _event(run, "titan.notification-binding.object-vtable-identity", "BLOCKED")
+    vtable_event = vtable_pass or vtable_blocked
+    vtable = fields(vtable_event["detail"]) if vtable_event else {}
     empty = fields((_event(run, "titan.notification-binding.empty", "PASS") or {}).get(
         "detail", ""))
     registry = fields((_event(run, "titan.notification-binding.registry", "PASS") or {}).get(
@@ -119,9 +129,21 @@ def triage(events: list[dict], run_id: str) -> dict:
         stable.get("selectors") == "14/24" and stable.get("attempts") == "1/1"
     )
     binding_ok = ordered and create_ok and bind_ok and relationship_ok
+    create_attempts = sequence.count(("titan.notification-binding.create", "START"))
+    bind_attempts = sequence.count(("titan.notification-binding.bind", "START"))
+    vtable_mismatch = bool(
+        create_ok and vtable_blocked and bind_attempts == 0 and
+        report["selector25_call"]["attempts"] == 0 and
+        vtable.get("unslid") not in {None, vtable.get("expected")}
+    )
     report["notification_binding_ok"] = binding_ok
-    report["selector14_attempts"] = 1 if create_ok else None
-    report["selector24_attempts"] = 1 if bind_ok else None
+    report["selector14_attempts"] = create_attempts
+    report["selector24_attempts"] = bind_attempts
+    report["notification_queue_vtable"] = {
+        "status": vtable_event["status"] if vtable_event else "MISSING",
+        "observed": vtable.get("unslid", "missing"),
+        "expected": vtable.get("expected", "missing"),
+    }
     report["notification_id"] = numbered(create_pass["detail"], "id") if create_pass else None
     report["notification_derived"] = link.get("derived", "missing")
 
@@ -132,6 +154,8 @@ def triage(events: list[dict], run_id: str) -> dict:
         report["verdict"] = "agx_notification_binding_observed_packet_blocked"
     elif binding_ok:
         report["verdict"] = "agx_notification_binding_observed"
+    elif vtable_mismatch:
+        report["verdict"] = "notification_queue_vtable_mismatch_before_bind"
     else:
         report["verdict"] = "incomplete_or_blocked"
     report["limits"] = (
@@ -150,6 +174,9 @@ def render_compact(report: dict) -> str:
         f"notification_binding: {'ok' if report['notification_binding_ok'] else 'incomplete'}\n"
         f"selector14: attempts={report['selector14_attempts']} id={notification_text}\n"
         f"selector24: attempts={report['selector24_attempts']} derived={report['notification_derived']}\n"
+        f"notification_vtable: {report['notification_queue_vtable']['status']} "
+        f"observed={report['notification_queue_vtable']['observed']} "
+        f"expected={report['notification_queue_vtable']['expected']}\n"
         + render_zero_compact(report)
     )
 

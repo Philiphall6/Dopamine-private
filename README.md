@@ -25,7 +25,7 @@ flowchart TD
     B[Reversible app-owned page alias write<br/>RUNTIME PASS]
     C[Owned AGX client, shared buffer and queue<br/>RUNTIME PASS]
     D[Selector 25 G14P 0x40 wrapper contract<br/>RUNTIME PASS]
-    E[Notification queue selectors 14 and 24<br/>COMPILED PASS / DEVICE PENDING]
+    E[Notification queue selector 14<br/>RUNTIME PASS; selector 24 pending]
     P[MDSID packet and low-VA GXF TTBR0 route<br/>STATIC PASS]
     F[BEE7 active-root discovery<br/>STATIC PASS]
     G[16 KiB cloned-root format<br/>STATIC PASS]
@@ -50,7 +50,8 @@ flowchart TD
     classDef blocked fill:#8a3030,color:#fff,stroke:#5e2020
     class A,B,C runtime
     class D runtime
-    class E,P,F,G,H,I static
+    class E runtime
+    class P,F,G,H,I static
     class J,K pending
     class L,M,N,O blocked
 ```
@@ -63,15 +64,19 @@ remained unchanged. Exact-image control flow proves that this value is returned
 before backend allocation when `queue+0x428` is null. The missing prerequisite
 is therefore the normal IOGPU notification queue, not another record-size guess.
 
-The only justified next device run is the verified bounded
-`self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1`
-probe. It creates one notification queue with
-selector 14, binds it once with selector 24, verifies `queue+0x428` and
-`queue+0x430`, then makes at most one selector-25 call. It does not install a
-replacement root, force a power transition, perform GPU MMIO, write physical
-memory, or modify protected memory.
+The first notification-bound run reached selector 14 and created its owned
+notification queue, then stopped at a vtable guard before selector 24 or
+selector 25. Exact-image analysis corrected that guard from
+`0xfffffff007e42f28` to `0xfffffff007e479a8`. The only justified next device
+run is the verified bounded
+`self-page-write-v1+agx-notification-vtable-v2+rtkit-mmio-disabled-v1` probe.
+It creates one notification queue with selector 14, binds it once with selector
+24, verifies `queue+0x428` and `queue+0x430`, then makes at most one
+selector-25 call. It does not install a replacement root, force a power
+transition, perform GPU MMIO, write physical memory, or modify protected
+memory.
 
-Current private build candidate:
+Last device-tested private build (v4, retired at the vtable guard):
 
 | Field | Value |
 | --- | --- |
@@ -81,7 +86,7 @@ Current private build candidate:
 | Embedded revision | `self-page-write-v1+agx-notification-bound-zero-packet-v1+rtkit-mmio-disabled-v1` |
 | Safety mode | `no-gfx-mmio` |
 | Probe markers | `titan.notification-binding.link`, `titan.zero-packet.record-contract` |
-| Offline tests | 297 passing |
+| Device result | Selector 14 passed; vtable guard stopped before selectors 24 and 25 |
 | Call boundary | One selector 14, one selector 24, at most one selector 25 |
 | Compiled evidence | selectors `0x0e`, `0x18`, `0x19`; queue offsets `0x428/+0x430`; record `0x40` |
 
@@ -102,8 +107,9 @@ Last device-tested private build (ABI v3, retired):
 The exact selector-25 batch reads `queue+0x428` before either the backend or
 parser. Selector 14 creates a 256-by-32-byte `IOGPUNotificationQueue` and
 registers it under `client-table+0x90`; selector 24 stores the derived object at
-`queue+0x428` and the queue object through `queue+0x430`. The v4 source validates
-all of these relations before the one-call selector-25 boundary.
+`queue+0x428` and the queue object through `queue+0x430`. The exact selector-14
+factory installs notification vtable `0xfffffff007e479a8`; v2 validates this
+identity before the one-call selector-25 boundary.
 
 The build is not a jailbreak release. Sileo and bootstrap deployment remain
 blocked behind selector-25 acceptance, power-lifecycle survival, reversible
