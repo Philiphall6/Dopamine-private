@@ -44,20 +44,16 @@ jobs:
       - name: Install libarchive headers
         run: brew install libarchive
 
-      - name: Install iOS 16 SDK for the compile check
+      - name: Verify Xcode iPhoneOS SDK
         shell: bash
         run: |
           set -euxo pipefail
-          sdk_archive="$RUNNER_TEMP/iPhoneOS16.5.sdk.tar.xz"
-          sdk_root="$RUNNER_TEMP/ios16-sdk"
-          curl -fsSL \
-            https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz \
-            -o "$sdk_archive"
-          mkdir -p "$sdk_root"
-          tar -xJf "$sdk_archive" -C "$sdk_root"
-          test -d "$sdk_root/iPhoneOS16.5.sdk"
-          test -f "$sdk_root/iPhoneOS16.5.sdk/SDKSettings.plist"
-          echo "IOS16_SDK_PATH=$sdk_root/iPhoneOS16.5.sdk" >> "$GITHUB_ENV"
+          xcodebuild -version
+          xcodebuild -showsdks
+          sdk_path="$(xcrun --sdk iphoneos --show-sdk-path)"
+          test -d "$sdk_path"
+          test -f "$sdk_path/SDKSettings.plist"
+          echo "Using Xcode iPhoneOS SDK: $sdk_path"
 
       - name: Prepare Titan's generated headers and libraries
         shell: bash
@@ -78,12 +74,28 @@ jobs:
             -project Application/Dopamine.xcodeproj \
             -target Titan \
             -configuration Debug \
-            -sdk "$IOS16_SDK_PATH" \
+            -sdk iphoneos \
             IPHONEOS_DEPLOYMENT_TARGET=16.1 \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             | tee "$RUNNER_TEMP/titan-xcodebuild.log"
+
+      - name: Summarize Objective-C warnings
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          log="$RUNNER_TEMP/titan-xcodebuild.log"
+          if [[ ! -f "$log" ]]; then
+            echo "Titan compile log was not produced"
+            exit 0
+          fi
+          warning_count="$(grep -Eic '(^|[[:space:]])(warning:|clang: warning:)' "$log" || true)"
+          echo "Objective-C/compiler warning lines: $warning_count"
+          if [[ "$warning_count" -gt 0 ]]; then
+            grep -Ei '(^|[[:space:]])(warning:|clang: warning:)' "$log" || true
+          fi
 
       - name: Run offline verification suite
         if: ${{ always() }}
