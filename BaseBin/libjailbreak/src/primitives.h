@@ -12,6 +12,51 @@
 #define SIGN(p)          ((p) & BIT(55))
 #define UNSIGN_PTR(p)    (SIGN(p) ? ((p) | PAC_MASK) : ((p) & ~PAC_MASK))
 
+// Capability state is deliberately separate from the function-pointer table.
+// A callback being installed is only a declaration; it is not proof that the
+// corresponding operation is safe, persistent, or usable on protected memory.
+typedef enum {
+	LJB_CAPABILITY_KERNEL_READ = 0,
+	LJB_CAPABILITY_KERNEL_WRITE,
+	LJB_CAPABILITY_PHYSICAL_READ,
+	LJB_CAPABILITY_PHYSICAL_WRITE,
+	LJB_CAPABILITY_PROTECTED_MEMORY_WRITE,
+	LJB_CAPABILITY_COUNT,
+} libjailbreak_capability;
+
+typedef enum {
+	LJB_CAPABILITY_NOT_TESTED = 0,
+	LJB_CAPABILITY_DECLARED,
+	LJB_CAPABILITY_RUNTIME_VERIFIED,
+	LJB_CAPABILITY_BLOCKED,
+	LJB_CAPABILITY_UNAVAILABLE,
+} libjailbreak_capability_state;
+
+typedef enum {
+	LJB_CAPABILITY_EVIDENCE_NONE = 0,
+	LJB_CAPABILITY_EVIDENCE_FUNCTION_POINTER,
+	LJB_CAPABILITY_EVIDENCE_BOUNDED_RUNTIME,
+	LJB_CAPABILITY_EVIDENCE_METADATA_ONLY,
+	LJB_CAPABILITY_EVIDENCE_EXPLICIT_BLOCK,
+} libjailbreak_capability_evidence;
+
+typedef struct {
+	libjailbreak_capability_state state;
+	libjailbreak_capability_evidence evidence;
+} libjailbreak_capability_status;
+
+const char *libjailbreak_capability_name(libjailbreak_capability capability);
+const char *libjailbreak_capability_state_name(libjailbreak_capability_state state);
+const char *libjailbreak_capability_evidence_name(libjailbreak_capability_evidence evidence);
+void libjailbreak_capabilities_reset(void);
+void libjailbreak_capabilities_refresh_declared(void);
+int libjailbreak_capability_set(libjailbreak_capability capability,
+	libjailbreak_capability_state state,
+	libjailbreak_capability_evidence evidence);
+int libjailbreak_capability_get(libjailbreak_capability capability,
+	libjailbreak_capability_status *status);
+size_t libjailbreak_capabilities_snapshot(libjailbreak_capability_status *output, size_t capacity);
+
 typedef enum
 {
 	KALLOC_OPTION_GLOBAL, // Global Allocation, never manually freed

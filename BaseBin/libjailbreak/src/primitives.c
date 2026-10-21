@@ -7,8 +7,118 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/sysctl.h>
+#include <stdatomic.h>
 
 struct kernel_primitives gPrimitives = { 0 };
+
+static _Atomic(uint8_t) gCapabilityStates[LJB_CAPABILITY_COUNT];
+static _Atomic(uint8_t) gCapabilityEvidence[LJB_CAPABILITY_COUNT];
+
+static bool libjailbreak_capability_is_valid(libjailbreak_capability capability)
+{
+	return capability >= 0 && capability < LJB_CAPABILITY_COUNT;
+}
+
+const char *libjailbreak_capability_name(libjailbreak_capability capability)
+{
+	switch (capability) {
+		case LJB_CAPABILITY_KERNEL_READ: return "KERNEL_READ";
+		case LJB_CAPABILITY_KERNEL_WRITE: return "KERNEL_WRITE";
+		case LJB_CAPABILITY_PHYSICAL_READ: return "PHYSICAL_READ";
+		case LJB_CAPABILITY_PHYSICAL_WRITE: return "PHYSICAL_WRITE";
+		case LJB_CAPABILITY_PROTECTED_MEMORY_WRITE: return "PROTECTED_MEMORY_WRITE";
+		default: return "UNKNOWN";
+	}
+}
+
+const char *libjailbreak_capability_state_name(libjailbreak_capability_state state)
+{
+	switch (state) {
+		case LJB_CAPABILITY_NOT_TESTED: return "NOT_TESTED";
+		case LJB_CAPABILITY_DECLARED: return "DECLARED";
+		case LJB_CAPABILITY_RUNTIME_VERIFIED: return "RUNTIME_VERIFIED";
+		case LJB_CAPABILITY_BLOCKED: return "BLOCKED";
+		case LJB_CAPABILITY_UNAVAILABLE: return "UNAVAILABLE";
+		default: return "UNKNOWN";
+	}
+}
+
+const char *libjailbreak_capability_evidence_name(libjailbreak_capability_evidence evidence)
+{
+	switch (evidence) {
+		case LJB_CAPABILITY_EVIDENCE_NONE: return "NONE";
+		case LJB_CAPABILITY_EVIDENCE_FUNCTION_POINTER: return "FUNCTION_POINTER";
+		case LJB_CAPABILITY_EVIDENCE_BOUNDED_RUNTIME: return "BOUNDED_RUNTIME";
+		case LJB_CAPABILITY_EVIDENCE_METADATA_ONLY: return "METADATA_ONLY";
+		case LJB_CAPABILITY_EVIDENCE_EXPLICIT_BLOCK: return "EXPLICIT_BLOCK";
+		default: return "UNKNOWN";
+	}
+}
+
+void libjailbreak_capabilities_reset(void)
+{
+	for (int capability = 0; capability < LJB_CAPABILITY_COUNT; capability++) {
+		atomic_store(&gCapabilityStates[capability], LJB_CAPABILITY_NOT_TESTED);
+		atomic_store(&gCapabilityEvidence[capability], LJB_CAPABILITY_EVIDENCE_NONE);
+	}
+}
+
+int libjailbreak_capability_set(libjailbreak_capability capability,
+	libjailbreak_capability_state state,
+	libjailbreak_capability_evidence evidence)
+{
+	if (!libjailbreak_capability_is_valid(capability)) return -1;
+	if (state < LJB_CAPABILITY_NOT_TESTED || state > LJB_CAPABILITY_UNAVAILABLE) return -2;
+	if (evidence < LJB_CAPABILITY_EVIDENCE_NONE || evidence > LJB_CAPABILITY_EVIDENCE_EXPLICIT_BLOCK) return -3;
+
+	atomic_store(&gCapabilityStates[capability], state);
+	atomic_store(&gCapabilityEvidence[capability], evidence);
+	return 0;
+}
+
+int libjailbreak_capability_get(libjailbreak_capability capability,
+	libjailbreak_capability_status *status)
+{
+	if (!libjailbreak_capability_is_valid(capability) || !status) return -1;
+	status->state = atomic_load(&gCapabilityStates[capability]);
+	status->evidence = atomic_load(&gCapabilityEvidence[capability]);
+	return 0;
+}
+
+size_t libjailbreak_capabilities_snapshot(libjailbreak_capability_status *output, size_t capacity)
+{
+	if (!output || capacity == 0) return LJB_CAPABILITY_COUNT;
+
+	size_t count = capacity < LJB_CAPABILITY_COUNT ? capacity : LJB_CAPABILITY_COUNT;
+	for (size_t capability = 0; capability < count; capability++) {
+		libjailbreak_capability_get((libjailbreak_capability)capability, &output[capability]);
+	}
+	return count;
+}
+
+static void libjailbreak_capability_declare_if_unset(libjailbreak_capability capability, bool declared)
+{
+	if (!declared) return;
+	if (atomic_load(&gCapabilityStates[capability]) == LJB_CAPABILITY_NOT_TESTED) {
+		libjailbreak_capability_set(capability, LJB_CAPABILITY_DECLARED,
+			LJB_CAPABILITY_EVIDENCE_FUNCTION_POINTER);
+	}
+}
+
+void libjailbreak_capabilities_refresh_declared(void)
+{
+	// This function reports callback presence only. It never promotes a
+	// capability to RUNTIME_VERIFIED and intentionally never infers protected
+	// memory access from any ordinary primitive.
+	libjailbreak_capability_declare_if_unset(LJB_CAPABILITY_KERNEL_READ,
+		gPrimitives.kreadbuf || (gPrimitives.physreadbuf && gPrimitives.vtophys));
+	libjailbreak_capability_declare_if_unset(LJB_CAPABILITY_KERNEL_WRITE,
+		gPrimitives.kwritebuf || (gPrimitives.physwritebuf && gPrimitives.vtophys));
+	libjailbreak_capability_declare_if_unset(LJB_CAPABILITY_PHYSICAL_READ,
+		gPrimitives.physreadbuf || (gPrimitives.kreadbuf && gPrimitives.phystokv));
+	libjailbreak_capability_declare_if_unset(LJB_CAPABILITY_PHYSICAL_WRITE,
+		gPrimitives.physwritebuf || (gPrimitives.kwritebuf && gPrimitives.phystokv));
+}
 
 // Wrappers physical <-> virtual
 

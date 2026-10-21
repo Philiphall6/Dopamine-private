@@ -2061,3 +2061,27 @@ tests and `git diff --check`. Objective-C compilation and V6 execution on the
 iPhone remain `NOT_TESTED` in this revision. Details are in
 `docs/A15_IOS26_AGX_BUFFER_TRACKING_V6_2026_10_20.md`.
 
+### 2026-10-21: A15 primitive capability map
+
+Added a read-only capability ledger to `libjailbreak` so the private A15 path
+can be compared with the official Dopamine flow without treating callback
+presence as proof of an available primitive. The ledger distinguishes
+`KERNEL_READ`, `KERNEL_WRITE`, `PHYSICAL_READ`, `PHYSICAL_WRITE` and
+`PROTECTED_MEMORY_WRITE`, and records `NOT_TESTED`, `DECLARED`,
+`RUNTIME_VERIFIED`, `BLOCKED` or `UNAVAILABLE` together with the evidence
+category.
+
+`libjailbreak_capabilities_refresh_declared()` only records declared callback
+or derivation paths. `DOExploit` invokes it after a successful `exploit_init`,
+so the same observation point is used for ClearSword, Titan and existing
+official exploit modules. It never promotes a capability to runtime-verified and
+never infers protected-memory access. No official privilege, bootstrap,
+trust-cache, SPTM/PAPT or physical-write path consumes the ledger.
+
+The current mapping keeps ClearSword's bounded kernel read/write observations
+separate from Titan's unverified physical-write publication. Titan remains
+blocked before the selector-25 packet boundary on the supplied A15 logs.
+Offline source-contract coverage was added; Objective-C compilation and new
+device execution remain `NOT_TESTED` for this revision. Details are in
+`docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md`.
+

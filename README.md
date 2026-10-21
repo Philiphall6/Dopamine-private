@@ -10,7 +10,7 @@ Official website / download: https://ellekit.space/dopamine/
 
 ## Private A15 / iOS 26 research status
 
-Last updated: 2026-10-20. Exact target: iPhone14,2, iOS 26.0.1,
+Last updated: 2026-10-21. Exact target: iPhone14,2, iOS 26.0.1,
 build 23A355. Private research branch:
 `codex/a15-ios26-private-research`.
 
@@ -172,6 +172,18 @@ existing one-call empty-record boundary is unchanged. V6 is `STATIC PASS` and
 offline-tested only; it does not add a new GPU operation or claim a device
 run.
 
+The primitive capability map is documented in
+[`docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md`](docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md).
+It exposes a read-only `libjailbreak` ledger for `KERNEL_READ`,
+`KERNEL_WRITE`, `PHYSICAL_READ`, `PHYSICAL_WRITE` and
+`PROTECTED_MEMORY_WRITE`. Callback presence is recorded as `DECLARED`; it is
+never promoted to `RUNTIME_VERIFIED` automatically, and the official
+privilege, bootstrap and protected-memory paths do not consume this ledger
+as authorization.
+The current A15 evidence therefore remains limited to the bounded ClearSword
+and reversible self-page observations; physical and protected writes remain
+blocked or not tested.
+
 ### Experimental A15 UI diagnostic
 
 On the exact `iPhone14,2` / A15 / iOS 26.0.1 build `23A355`, the main screen
@@ -224,6 +236,7 @@ Deployment order:
 - AGX lifecycle V2 offline tests: [`tools/a15_ios26/test_agx_lifecycle_v2.py`](tools/a15_ios26/test_agx_lifecycle_v2.py)
 - AGX lifecycle V3: [`docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md`](docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md)
 - Build validation V5: [`docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md`](docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md)
+- Primitive capability map: [`docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md`](docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md)
 - AGX lifecycle log audit: [`tools/a15_ios26/audit_agx_lifecycle_log.py`](tools/a15_ios26/audit_agx_lifecycle_log.py)
 - Manual macOS compile check: [`.github/workflows/a15-ios26-compile-check.yml`](.github/workflows/a15-ios26-compile-check.yml)
 
