@@ -2085,3 +2085,24 @@ Offline source-contract coverage was added; Objective-C compilation and new
 device execution remain `NOT_TESTED` for this revision. Details are in
 `docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md`.
 
+### 2026-10-21: Shared-buffer restore validation before selector 25
+
+The supplied A15 logs showed that the intentional 32-byte mutation at offset
+`0x100` remained in place when `PREFLIGHT_FINAL` required an all-zero buffer.
+`titan.m` now captures the post-initialization baseline, restores only those
+32 bytes immediately after the alias readback, and verifies the alias bytes,
+the full-buffer zero condition and the complete baseline match before queue
+preflight. The cleanup path retains the same restoration as a fallback and
+continues to suppress duplicate cleanup.
+
+For this first validation revision, selector 25 is compile-time disabled after
+the safe preflight check. No packet is submitted and no new MMIO, physical or
+protected operation is introduced. The expected device evidence is
+`ALIAS_AFTER_RESTORE` and `PREFLIGHT_FINAL` with `nonzero-count=0`, an unchanged
+baseline SHA-256, and an explicit `NOT_TESTED` selector-25 checkpoint.
+
+Offline verification passed: 339 Python tests, `compileall`, the research
+integration audit and `git diff --check`. Objective-C compilation and device
+execution remain `NOT_TESTED` until GitHub Actions and a separately authorized
+diagnostic run.
+

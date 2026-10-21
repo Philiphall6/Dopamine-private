@@ -184,6 +184,13 @@ The current A15 evidence therefore remains limited to the bounded ClearSword
 and reversible self-page observations; physical and protected writes remain
 blocked or not tested.
 
+The shared-buffer restore validation is now separated from cleanup: the
+temporary 32-byte alias mutation is restored and compared with the
+`BUFFER_INITIALIZED` baseline before queue preflight. This validation revision
+keeps selector 25 disabled, so a successful zero-buffer check cannot advance
+into packet consumption. It does not add a GPU operation or change the
+physical/protected-write status.
+
 ### Experimental A15 UI diagnostic
 
 On the exact `iPhone14,2` / A15 / iOS 26.0.1 build `23A355`, the main screen
