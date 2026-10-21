@@ -158,10 +158,13 @@ The V5 compile validation was inspected from private Actions run
 [`39437143268`](https://github.com/Philiphall6/Dopamine-private/actions/runs/39437143268).
 That run proved `Titan.framework` compilation, inclusion of the modified
 `Application/Dopamine/Exploits/Titan/exploit/titan.m` Objective-C source, and
-315 offline Python tests. Its compile used the Xcode 26.5 SDK while targeting
-iOS 16.1, so the workflow now downloads and selects the iPhoneOS 16.5 SDK
-explicitly for the next verification run. This remains a compile-only check;
-it does not produce an IPA, install anything, or validate a jailbreak.
+315 offline Python tests. The follow-up SDK correction was validated by
+private Actions run [`39562964797`](https://github.com/Philiphall6/Dopamine-private/actions/runs/39562964797):
+Xcode 26.6 selected its installed `iphoneos` SDK through `-sdk iphoneos`,
+while retaining `IPHONEOS_DEPLOYMENT_TARGET=16.1`. The workflow no longer
+downloads or addresses an external iPhoneOS 16.5 SDK. This remains a
+compile-only check; it does not produce an IPA, install anything, or validate
+a jailbreak.
 
 The AGX shared-buffer tracking V6 is documented in
 [`docs/A15_IOS26_AGX_BUFFER_TRACKING_V6_2026_10_20.md`](docs/A15_IOS26_AGX_BUFFER_TRACKING_V6_2026_10_20.md).
@@ -190,6 +193,14 @@ temporary 32-byte alias mutation is restored and compared with the
 keeps selector 25 disabled, so a successful zero-buffer check cannot advance
 into packet consumption. It does not add a GPU operation or change the
 physical/protected-write status.
+
+The V8 chain comparison is documented in
+[`docs/A15_IOS26_TITAN_CHAIN_COMPARISON_V8.md`](docs/A15_IOS26_TITAN_CHAIN_COMPARISON_V8.md).
+It compares official Dopamine 3.x, the historical `a91336d4` empty-record
+route and V7, and identifies `buildPhysRWPrimitive` as the first official
+component not justified by the demonstrated A15 capabilities. V8 keeps the
+selector-25 guard and adds only an offline-safe fix for the
+`proc_vwritebuf()` dispatch recursion plus source-contract tests.
 
 ### Experimental A15 UI diagnostic
 
@@ -244,6 +255,7 @@ Deployment order:
 - AGX lifecycle V3: [`docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md`](docs/A15_IOS26_AGX_LIFECYCLE_V3_2026_10_20.md)
 - Build validation V5: [`docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md`](docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md)
 - Primitive capability map: [`docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md`](docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md)
+- Titan chain comparison V8: [`docs/A15_IOS26_TITAN_CHAIN_COMPARISON_V8.md`](docs/A15_IOS26_TITAN_CHAIN_COMPARISON_V8.md)
 - AGX lifecycle log audit: [`tools/a15_ios26/audit_agx_lifecycle_log.py`](tools/a15_ios26/audit_agx_lifecycle_log.py)
 - Manual macOS compile check: [`.github/workflows/a15-ios26-compile-check.yml`](.github/workflows/a15-ios26-compile-check.yml)
 

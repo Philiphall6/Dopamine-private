@@ -2106,3 +2106,28 @@ integration audit and `git diff --check`. Objective-C compilation and device
 execution remain `NOT_TESTED` until GitHub Actions and a separately authorized
 diagnostic run.
 
+### 2026-10-21: Titan chain comparison V8 and interface correction
+
+Compared the official Dopamine 3.x path with the historical `a91336d4`
+selector-25 empty-record route and the current V7 restore-before-preflight
+route. The official selection/lifecycle scaffolding and ordinary
+`libjailbreak` callback wrappers are reusable, but the A15 evidence does not
+provide the physical-write and protected-memory contract required by
+`buildPhysRWPrimitive`, privilege elevation or rootless bootstrap. Titan V7
+therefore remains a bounded buffer/queue diagnostic with selector 25 disabled;
+a normal Mach return from the historical empty-record call is not treated as
+MDSID parser or GPU firmware proof.
+
+Applied one offline-safe interface correction in
+`BaseBin/libjailbreak/src/primitives.c`: `proc_vwritebuf()` now delegates to
+`vwritebuf()` instead of recursively calling itself. Added targeted V8 source
+tests for that dispatch, the V7 restore ordering and selector guard, the
+active-probe stop boundary and the official physrw mapping contract. No Titan
+source, selector-25 guard, MDSID/GPU packet, MMIO, physical/protected write,
+SPTM/PAPT operation or bootstrap path was changed.
+
+The full local validation command set is recorded in
+`docs/A15_IOS26_TITAN_CHAIN_COMPARISON_V8.md`; Objective-C compilation is
+tracked separately through the manual GitHub Actions workflow. This entry
+does not claim a jailbreak or a new device validation.
+
