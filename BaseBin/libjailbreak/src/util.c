@@ -460,13 +460,13 @@ int pmap_expand_range(uint64_t pmap, uint64_t vaStart, uint64_t size)
 				}
 
 				// Set type to nested
-				physwrite8(kvtophys(pmap + koffsetof(pmap, type)), 3);
+				if (physwrite8(kvtophys(pmap + koffsetof(pmap, type)), 3) != 0) return -8;
 
 				// Remove mapping (table will stay cause nested is set)
 				pmap_remove(pmap, unmappedStart, unmappedStart + unmappedSize);
 
 				// Change type back
-				physwrite8(kvtophys(pmap + koffsetof(pmap, type)), 0);
+				if (physwrite8(kvtophys(pmap + koffsetof(pmap, type)), 0) != 0) return -9;
 				
 				unmappedStart = 0;
 				unmappedSize = 0;
@@ -505,7 +505,7 @@ int pmap_expand_range(uint64_t pmap, uint64_t vaStart, uint64_t size)
 					uint64_t newTable = pmap_alloc_page_table(pmap, leafLevel, pt_va);
 					if (newTable) {
 						uint64_t oldEntry = physread64(pte);
-						physwrite64(pte, newTable | ARM_TTE_VALID | ARM_TTE_TYPE_TABLE);
+						if (physwrite64(pte, newTable | ARM_TTE_VALID | ARM_TTE_TYPE_TABLE) != 0) return -8;
 						if (ksymbol(libsptm_frame_table) && !oldEntry) {
 							// On SPTM, we need to bump the refcount of the parent page table aswell
 							uint64_t parentPt = 0;
@@ -595,7 +595,7 @@ int pmap_map_in_with_flags(uint64_t pmap, uint64_t uaStart, uint64_t paStart, ui
 		uint64_t leafLevel = PMAP_TT_L2_LEVEL;
 		uint64_t level2Table = vtophys_lvl(ttep, uaL2Cur, &leafLevel, NULL);
 		if (!level2Table) return -4;
-		physwritebuf(level2Table, tableToWrite, vm_real_kernel_page_size);
+		if (physwritebuf(level2Table, tableToWrite, vm_real_kernel_page_size) != 0) return -5;
 	}
 
 	return 0;

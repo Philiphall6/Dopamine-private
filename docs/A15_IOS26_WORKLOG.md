@@ -2131,3 +2131,34 @@ The full local validation command set is recorded in
 tracked separately through the manual GitHub Actions workflow. This entry
 does not claim a jailbreak or a new device validation.
 
+### 2026-10-21: focused `buildPhysRWPrimitive` prerequisite review V9
+
+Followed the exact official A15 path from `DOJailbreaker` into
+`libjailbreak_physrw_pte_init()` and `physrw_pte_handoff()`. The review
+separates source-level function presence from bounded A15 evidence. ClearSword
+has a bounded kernel read/write result; translation callbacks are present but a
+generic physical read/write target was not validated; Titan's physical-write
+publication is after a successful `titan_run()` and is not reached by the V7
+probe, which stops with selector 25 disabled.
+
+The first unproven transition is the physical PTE handoff: page-table
+expansion, magic-table and ASID PTE writes, TLB/window postconditions, and any
+SPTM frame metadata work. No new privileged operation was executed. The review
+also records that the current PTE initializer ignores the handoff return value
+before publishing callbacks; the follow-up correction closes that error path,
+but this remains separate from evidence of a working A15 physrw primitive.
+
+Added `docs/A15_IOS26_BUILDPHYSRW_PREREQUISITES_V9.md` and the offline source
+contract test `tools/a15_ios26/test_build_physrw_prerequisites.py`. Titan,
+selector 25, MMIO, physical/protected writes, SPTM/PAPT state and bootstrap
+remain unchanged and untested.
+
+The follow-up V9 physrw correction captures the `physrw_pte_handoff()` result,
+checks the PTE write and ASID translation return paths, destroys the temporary
+mutex on handoff failure, commits `gAsid` only after success, and leaves prior
+KRW callbacks untouched until physical callbacks may be published. The
+root-side initializer now propagates the local initializer result as well, and
+the existing page-table mapping write errors are no longer discarded. This
+remains defensive error handling only: no new PTE/physical write, rollback,
+SPTM/PAPT operation or mapping-window postcondition was added.
+

@@ -149,7 +149,7 @@ int physrw_pte_physaccess_mapped(uint64_t pa, uint64_t size, kernel_map_accessor
 
 int physrw_pte_handoff(pid_t pid, uint64_t *asidPtr)
 {
-	if (!pid) return -1;
+	if (!pid || !asidPtr) return -1;
 
 	uint64_t proc = proc_find(pid);
 	if (!proc) return -2;
@@ -166,6 +166,7 @@ int physrw_pte_handoff(pid_t pid, uint64_t *asidPtr)
 		if (!pmap) { ret = -5; break; };
 
 		uint64_t ttep = kread64(pmap + koffsetof(pmap, ttep));
+		if (!ttep) { ret = -8; break; }
 
 		// Allocate magic page table to our process at last possible location
 		int exp_r = pmap_expand_range(pmap, MAGIC_PT_ADDRESS, L2_BLOCK_SIZE);
@@ -175,15 +176,18 @@ int physrw_pte_handoff(pid_t pid, uint64_t *asidPtr)
 		uint64_t leafLevel = PMAP_TT_L2_LEVEL;
 		uint64_t magicPT = vtophys_lvl(ttep, MAGIC_PT_ADDRESS, &leafLevel, NULL);
 		if (!magicPT) { ret = -7; break; }
-		physwrite64(magicPT, magicPT | PERM_TO_PTE(PERM_KRW_URW) | PTE_NON_GLOBAL | PTE_OUTER_SHAREABLE | PTE_LEVEL3_ENTRY);
+		uint64_t magicPTE = magicPT | PERM_TO_PTE(PERM_KRW_URW) | PTE_NON_GLOBAL | PTE_OUTER_SHAREABLE | PTE_LEVEL3_ENTRY;
+		if (physwrite64(magicPT, magicPTE) != 0) { ret = -9; break; }
 
 		// Map in the pmap at MAGIC_PT_ADDRESS+vm_real_kernel_page_size
 		uint64_t asid = pmap + (koffsetof(pmap, sw_asid) ?: koffsetof(pmap, asid));
 		uint64_t asid_page = asid & ~vm_real_kernel_page_mask;
 		uint64_t asid_page_pa = kvtophys(asid_page);
+		if (!asid_page_pa) { ret = -10; break; }
 		uint64_t asid_pageoff = asid & vm_real_kernel_page_mask;
+		uint64_t asidPTE = asid_page_pa | PERM_TO_PTE(PERM_KRW_URW) | PTE_NON_GLOBAL | PTE_OUTER_SHAREABLE | PTE_LEVEL3_ENTRY;
+		if (physwrite64(magicPT+8, asidPTE) != 0) { ret = -11; break; }
 		*asidPtr = (uint64_t)(MAGIC_PT_ADDRESS + vm_real_kernel_page_size + asid_pageoff);
-		physwrite64(magicPT+8, asid_page_pa | PERM_TO_PTE(PERM_KRW_URW) | PTE_NON_GLOBAL | PTE_OUTER_SHAREABLE | PTE_LEVEL3_ENTRY);
 
 		if (getpid() == pid) {
 			flush_tlb();
@@ -199,9 +203,23 @@ int libjailbreak_physrw_pte_init(bool receivedHandoff, uint64_t asidPtr)
 	if (pthread_mutex_init(&gLock, NULL) != 0) return -8;
 
 	if (!receivedHandoff) {
-		physrw_pte_handoff(getpid(), (uint64_t *)&gAsid);
+		uint64_t handoffAsid = 0;
+		int handoffRet = physrw_pte_handoff(getpid(), &handoffAsid);
+		if (handoffRet != 0) {
+			(void)pthread_mutex_destroy(&gLock);
+			return handoffRet;
+		}
+		if (!handoffAsid) {
+			(void)pthread_mutex_destroy(&gLock);
+			return -12;
+		}
+		gAsid = (void *)handoffAsid;
 	}
 	else {
+		if (!asidPtr) {
+			(void)pthread_mutex_destroy(&gLock);
+			return -12;
+		}
 		gAsid = (void *)asidPtr;
 	}
 	gPrimitives.physreadbuf = physrw_pte_physreadbuf;

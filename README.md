@@ -202,6 +202,21 @@ component not justified by the demonstrated A15 capabilities. V8 keeps the
 selector-25 guard and adds only an offline-safe fix for the
 `proc_vwritebuf()` dispatch recursion plus source-contract tests.
 
+The focused V9 prerequisite review is documented in
+[`docs/A15_IOS26_BUILDPHYSRW_PREREQUISITES_V9.md`](docs/A15_IOS26_BUILDPHYSRW_PREREQUISITES_V9.md).
+It follows the A15-selected PTE route through `physrw_pte_handoff()` and
+separates source presence, bounded A15 evidence and missing physical or
+protected primitives. It also records the existing PTE initializer contract
+boundary and its V9 error-handling correction. This is a read-only analysis;
+Titan and selector 25 are unchanged.
+
+The V9 physrw error-handling correction now propagates PTE handoff failures,
+checks the internal PTE write results, destroys the temporary mutex on failure,
+propagates the existing page-table mapping write errors, and preserves
+existing callbacks until successful publication. It does not prove the
+physical window or protected-memory access; partial page-table work and the
+required runtime postcondition remain unvalidated.
+
 ### Experimental A15 UI diagnostic
 
 On the exact `iPhone14,2` / A15 / iOS 26.0.1 build `23A355`, the main screen
@@ -256,6 +271,7 @@ Deployment order:
 - Build validation V5: [`docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md`](docs/A15_IOS26_BUILD_VALIDATION_V5_2026_10_20.md)
 - Primitive capability map: [`docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md`](docs/A15_IOS26_PRIMITIVE_CAPABILITIES_2026_10_21.md)
 - Titan chain comparison V8: [`docs/A15_IOS26_TITAN_CHAIN_COMPARISON_V8.md`](docs/A15_IOS26_TITAN_CHAIN_COMPARISON_V8.md)
+- `buildPhysRWPrimitive` prerequisites V9: [`docs/A15_IOS26_BUILDPHYSRW_PREREQUISITES_V9.md`](docs/A15_IOS26_BUILDPHYSRW_PREREQUISITES_V9.md)
 - AGX lifecycle log audit: [`tools/a15_ios26/audit_agx_lifecycle_log.py`](tools/a15_ios26/audit_agx_lifecycle_log.py)
 - Manual macOS compile check: [`.github/workflows/a15-ios26-compile-check.yml`](.github/workflows/a15-ios26-compile-check.yml)
 

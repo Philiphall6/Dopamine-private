@@ -20,12 +20,14 @@ int jbclient_initialize_primitives_internal(bool physrwPTE)
 		xpc_release(xSystemInfo);
 		uint64_t asidPtr = 0;
 		if (jbclient_root_get_physrw(physrwPTE, &asidPtr) == 0) {
+			int initResult = 0;
 			if (physrwPTE) {
-				libjailbreak_physrw_pte_init(true, asidPtr);
+				initResult = libjailbreak_physrw_pte_init(true, asidPtr);
 			}
 			else {
-				libjailbreak_physrw_init(true);
+				initResult = libjailbreak_physrw_init(true);
 			}
+			if (initResult != 0) return initResult;
 			libjailbreak_translation_init();
 			libjailbreak_IOSurface_primitives_init();
 			if (gPrimitives.kalloc_local) {
