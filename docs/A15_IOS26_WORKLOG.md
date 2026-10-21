@@ -2162,3 +2162,25 @@ the existing page-table mapping write errors are no longer discarded. This
 remains defensive error handling only: no new PTE/physical write, rollback,
 SPTM/PAPT operation or mapping-window postcondition was added.
 
+### 2026-10-21: Titan to PHYSICAL_WRITE transition review V10
+
+Reconstructed the actual transition from ClearSword KRW through Titan's A15
+diagnostic path, the `titan_run()` success condition, Titan callback
+publication, `buildPhysRWPrimitive()` and the A15-selected
+`physrw_pte_handoff()` path. The review separates the normal Dopamine path from
+the A15ACTIVE path, which deliberately returns before command-buffer setup,
+selector 25, MMIO/RTKit activity, GFX ROP, Titan callback publication and
+physrw construction.
+
+The supplied A15 observations prove the bounded ClearSword read/write result,
+AGX object identity, V7 buffer restoration, and selectors 6/14/24. They do not
+prove a persistent GPU/RTKit context, a self-reference PTE window,
+`krw_info.pte/kaddr`, a published `titan_physwritebuf`, a physical PTE write or
+protected-memory access. The V9 handoff error fix remains correct but is not a
+runtime validity proof.
+
+Added `docs/A15_IOS26_TITAN_PHYSICAL_WRITE_TRANSITION_V10.md`. No exploit code
+was changed, no selector or privileged operation was enabled, and no new
+device run was launched. The first missing prerequisite remains a durable,
+independently validated `PHYSICAL_WRITE` window before the A15 PTE handoff.
+

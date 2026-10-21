@@ -217,6 +217,16 @@ existing callbacks until successful publication. It does not prove the
 physical window or protected-memory access; partial page-table work and the
 required runtime postcondition remain unvalidated.
 
+The V10 Titan-to-`PHYSICAL_WRITE` transition review is documented in
+[`docs/A15_IOS26_TITAN_PHYSICAL_WRITE_TRANSITION_V10.md`](docs/A15_IOS26_TITAN_PHYSICAL_WRITE_TRANSITION_V10.md).
+It reconstructs the real A15ACTIVE stop boundary, the conditions for
+`gPrimitives.physwritebuf = titan_physwritebuf`, the GPU/RTKit and PTE-window
+dependencies, and the subsequent A15-selected `physrw_pte_handoff()` path.
+V10 makes no code change: selector 25, MMIO/RTKit, physical/protected writes,
+SPTM/PAPT changes and bootstrap remain disabled or untested. The first missing
+runtime proof is still a durable physical-write window suitable for the PTE
+handoff, not the presence of the builder symbol or callback field.
+
 ### Experimental A15 UI diagnostic
 
 On the exact `iPhone14,2` / A15 / iOS 26.0.1 build `23A355`, the main screen
