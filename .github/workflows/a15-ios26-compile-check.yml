@@ -62,6 +62,7 @@ jobs:
           make -C BaseBin .build .include 2>&1 | tee "$RUNNER_TEMP/basebin-prepare.log"
           make -C BaseBin ChOma 2>&1 | tee "$RUNNER_TEMP/choma-build.log"
           make -C BaseBin libjailbreak 2>&1 | tee "$RUNNER_TEMP/libjailbreak-build.log"
+          grep -F "backend_contract.c" "$RUNNER_TEMP/libjailbreak-build.log"
           test -f BaseBin/.include/libjailbreak/libjailbreak.h
           test -f BaseBin/libjailbreak/libjailbreak.dylib
           test -f BaseBin/.build/libchoma.dylib
@@ -81,21 +82,40 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | tee "$RUNNER_TEMP/titan-xcodebuild.log"
 
+      - name: Compile Dopamine application
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Application/Dopamine.xcodeproj \
+            -target Dopamine \
+            -configuration Debug \
+            -sdk iphoneos \
+            IPHONEOS_DEPLOYMENT_TARGET=16.1 \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee "$RUNNER_TEMP/dopamine-xcodebuild.log"
+
       - name: Summarize Objective-C warnings
         if: ${{ always() }}
         shell: bash
         run: |
           set -uo pipefail
-          log="$RUNNER_TEMP/titan-xcodebuild.log"
-          if [[ ! -f "$log" ]]; then
-            echo "Titan compile log was not produced"
-            exit 0
-          fi
-          warning_count="$(grep -Eic '(^|[[:space:]])(warning:|clang: warning:)' "$log" || true)"
-          echo "Objective-C/compiler warning lines: $warning_count"
-          if [[ "$warning_count" -gt 0 ]]; then
-            grep -Ei '(^|[[:space:]])(warning:|clang: warning:)' "$log" || true
-          fi
+          total=0
+          for log in "$RUNNER_TEMP/titan-xcodebuild.log" "$RUNNER_TEMP/dopamine-xcodebuild.log"; do
+            if [[ ! -f "$log" ]]; then
+              echo "Compile log was not produced: $log"
+              continue
+            fi
+            warning_count="$(grep -Eic '(^|[[:space:]])(warning:|clang: warning:)' "$log" || true)"
+            echo "$(basename "$log") Objective-C/compiler warning lines: $warning_count"
+            total=$((total + warning_count))
+            if [[ "$warning_count" -gt 0 ]]; then
+              grep -Ei '(^|[[:space:]])(warning:|clang: warning:)' "$log" || true
+            fi
+          done
+          echo "Total Objective-C/compiler warning lines: $total"
 
       - name: Run offline verification suite
         if: ${{ always() }}

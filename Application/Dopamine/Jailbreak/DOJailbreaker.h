@@ -18,6 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)runWithError:(NSError **)errOut didRemoveJailbreak:(BOOL*)didRemove showLogs:(BOOL *)showLogs;
 - (void)runA15IOS2601ActiveTitanProbeWithError:(NSError **)errOut;
+- (void)runA15IOS2601AGXDiagnosticsWithError:(NSError **)errOut;
 - (void)finalize;
 
 - (BOOL)contiguousMappingWorkaroundNeeded;

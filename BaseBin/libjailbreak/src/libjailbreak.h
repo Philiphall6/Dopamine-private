@@ -1,4 +1,5 @@
 #include "primitives.h"
+#include "backend_contract.h"
 #include "info.h"
 #include "kernel.h"
 #include "util.h"

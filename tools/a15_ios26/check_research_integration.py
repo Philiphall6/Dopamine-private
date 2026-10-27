@@ -127,9 +127,44 @@ def main() -> int:
         "missing experimental diagnostic warning flow",
     )
     require(
-        "[self startA15ActiveTitanProbe]" in main_view,
-        "exact research target does not route to the active Titan probe",
+        "[self startA15AGXDiagnostics]" in main_view,
+        "exact research target does not route to the independent AGX diagnostic path",
     )
+    require(
+        "runA15IOS2601AGXDiagnosticsWithError" in main_view,
+        "A15 UI does not call the independent AGX diagnostic entry point",
+    )
+    legacy_start = jailbreaker.find("- (void)runA15IOS2601ActiveTitanProbeWithError")
+    legacy_end = jailbreaker.find("- (void)runA15IOS2601AGXDiagnosticsWithError", legacy_start)
+    require(legacy_start >= 0 and legacy_end > legacy_start, "missing legacy Titan refusal")
+    legacy_body = jailbreaker[legacy_start:legacy_end]
+    require(
+        'A15ActiveProbeCheckpoint(@"titan.legacy", @"BLOCKED"' in legacy_body
+        and "historical Titan disabled on iOS 26" in legacy_body,
+        "legacy Titan entry point is not explicitly blocked on iOS 26",
+    )
+    agx_start = jailbreaker.find("- (void)runA15IOS2601AGXDiagnosticsWithError")
+    agx_end = jailbreaker.find("- (NSError *)buildPhysRWPrimitive", agx_start)
+    require(agx_start >= 0 and agx_end > agx_start, "missing independent AGX diagnostic entry point")
+    agx_body = jailbreaker[agx_start:agx_end]
+    for marker in (
+        'A15ActiveProbeCheckpoint(@"backend.contract", @"BLOCKED"',
+        "A15RunAGXServiceCensus();",
+        "A15RunHypervisorPreflight();",
+        'A15ActiveProbeCheckpoint(@"titan.legacy", @"NOT_TESTED"',
+        'A15ActiveProbeCheckpoint(@"probe.cleanup", @"PASS"',
+    ):
+        require(marker in agx_body, f"AGX diagnostic is missing marker: {marker}")
+    for forbidden in (
+        "gatherSystemInformation",
+        "[kernelExploit run]",
+        "[titan run]",
+        "IOServiceOpen",
+        "IOConnectCall",
+        "physwritebuf",
+        "buildPhysRWPrimitive",
+    ):
+        require(forbidden not in agx_body, f"AGX diagnostic unexpectedly invokes {forbidden}")
     active_start = jailbreaker.find("- (void)runA15IOS2601ActiveTitanProbeWithError")
     active_end = jailbreaker.find("- (NSError *)buildPhysRWPrimitive", active_start)
     require(active_start >= 0 and active_end > active_start, "missing bounded active probe")
@@ -1176,8 +1211,8 @@ def main() -> int:
         require(forbidden not in macho_preflight, f"Mach-O preflight can execute target code via {forbidden}")
 
     print(
-        "OK: exact iPhone14,2/23A355 active Titan probe enabled; "
-        "persistent checkpoints present; privilege and bootstrap stages remain blocked"
+        "OK: exact iPhone14,2/23A355 A15 diagnostics enabled; "
+        "historical Titan is blocked; privilege and bootstrap stages remain blocked"
     )
     return 0
 

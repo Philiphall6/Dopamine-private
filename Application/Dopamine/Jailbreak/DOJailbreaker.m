@@ -667,7 +667,23 @@ static void A15RunAGXServiceCensus(void)
         return;
     }
 
+    /*
+     * The iOS 26 target no longer enters the historical Titan chain.  Keep
+     * this entry point as a controlled refusal for old callers while the
+     * separate AGX diagnostic entry point remains available below.
+     */
     NSString *runID = NSUUID.UUID.UUIDString;
+    setenv("A15_ACTIVE_PROBE_RUN_ID", runID.UTF8String, 1);
+    A15ActiveProbeCheckpoint(@"titan.legacy", @"BLOCKED",
+        @"historical Titan disabled on iOS 26; use the independent AGX diagnostic path");
+    *errOut = [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedExploitation userInfo:@{
+        NSLocalizedDescriptionKey: @"Historical Titan is disabled for A15/iOS 26.0.1; no exploitation path was executed."
+    }];
+    return;
+
+    /* Retained below as historical reference for compatible-version audits. */
+#if 0
+    runID = NSUUID.UUID.UUIDString;
     setenv("A15_ACTIVE_PROBE_RUN_ID", runID.UTF8String, 1);
     A15ActiveProbeCheckpoint(@"probe.entry", @"START", @"target=iPhone14,2 build=23A355 mode=active-titan-bounded revision=self-page-write-v1+agx-notification-map-v3+rtkit-mmio-disabled-v1");
 
@@ -769,6 +785,34 @@ static void A15RunAGXServiceCensus(void)
     if (!publishedPhysicalWrite) {
         *errOut = [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedExploitation userInfo:@{NSLocalizedDescriptionKey: @"Titan returned without publishing a physical-write primitive."}];
     }
+#endif
+}
+
+- (void)runA15IOS2601AGXDiagnosticsWithError:(NSError **)errOut
+{
+    *errOut = nil;
+    DOEnvironmentManager *environment = [DOEnvironmentManager sharedManager];
+    if (![environment isA15IOS2601ResearchTarget]) {
+        *errOut = [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedExploitation userInfo:@{
+            NSLocalizedDescriptionKey: @"A15 AGX diagnostics rejected: this build is restricted to iPhone14,2 on iOS 26.0.1 (23A355)."
+        }];
+        return;
+    }
+
+    NSString *runID = NSUUID.UUID.UUIDString;
+    setenv("A15_ACTIVE_PROBE_RUN_ID", runID.UTF8String, 1);
+    A15ActiveProbeCheckpoint(@"probe.entry", @"START",
+        @"target=iPhone14,2 build=23A355 mode=agx-readonly revision=a15-backend-contract-v1");
+    A15ActiveProbeCheckpoint(@"backend.contract", @"BLOCKED",
+        @"no iOS 26 physical backend is registered; no callbacks or capability claims are published");
+    A15RunAGXServiceCensus();
+    A15RunHypervisorPreflight();
+    A15ActiveProbeCheckpoint(@"titan.legacy", @"NOT_TESTED",
+        @"historical Titan intentionally excluded from the A15 diagnostic path");
+    A15ActiveProbeCheckpoint(@"probe.cleanup", @"PASS",
+        @"read-only registry and userland preflight completed; no client, command, MMIO, or memory-write operation");
+    A15ActiveProbeCheckpoint(@"probe.complete", @"PASS",
+        @"AGX diagnostics completed; backend remains unavailable and no jailbreak was performed");
 }
 
 - (NSError *)buildPhysRWPrimitive

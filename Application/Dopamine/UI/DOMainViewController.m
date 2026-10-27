@@ -194,7 +194,7 @@ static uint64_t A15ResearchMonotonicNanoseconds(void)
         } completion:nil];
         
         if ([[DOEnvironmentManager sharedManager] isA15IOS2601ResearchTarget]) {
-            [self startA15ActiveTitanProbe];
+            [self startA15AGXDiagnostics];
         }
         else {
             [self startJailbreak];
@@ -255,7 +255,7 @@ static uint64_t A15ResearchMonotonicNanoseconds(void)
     });
 }
 
-- (void)startA15ActiveTitanProbe
+- (void)startA15AGXDiagnostics
 {
     DOJailbreaker *jailbreaker = [[DOJailbreaker alloc] init];
     [[DOUIManager sharedInstance] startLogCapture];
@@ -263,16 +263,15 @@ static uint64_t A15ResearchMonotonicNanoseconds(void)
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
         NSError *error = nil;
-        [jailbreaker runA15IOS2601ActiveTitanProbeWithError:&error];
+        [jailbreaker runA15IOS2601AGXDiagnosticsWithError:&error];
         dispatch_async(dispatch_get_main_queue(), ^{
             self.jailbreakBtn.enabled = YES;
             if (error) {
-                [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"Active Titan probe stopped: %@", error.localizedDescription] debug:NO];
+                [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"A15 AGX diagnostics stopped: %@", error.localizedDescription] debug:NO];
                 [self.navigationController pushViewController:[[DOLogCrashViewController alloc] initWithTitle:error.localizedDescription] animated:YES];
             }
             else {
-                [[DOUIManager sharedInstance] sendLog:@"Active Titan probe completed. No privilege or bootstrap stages were executed." debug:NO];
-                [[DOUIManager sharedInstance] completeJailbreak];
+                [[DOUIManager sharedInstance] sendLog:@"A15 AGX diagnostics completed. Historical Titan and jailbreak stages were not executed." debug:NO];
             }
         });
     });
