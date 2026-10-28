@@ -1,0 +1,55 @@
+name: libarchive CVE-2026-112522 diagnostic app
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tools/Libarchive-112522-Diagnostic/**"
+      - ".github/workflows/libarchive-112522-diagnostic.yml"
+
+jobs:
+  compile:
+    runs-on: macos-26
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26 installation
+        run: |
+          set -euo pipefail
+          selected=""
+          for candidate in \
+            /Applications/Xcode_26.6.app/Contents/Developer \
+            /Applications/Xcode_26.5.1.app/Contents/Developer \
+            /Applications/Xcode.app/Contents/Developer; do
+            if [[ -d "$candidate" ]]; then
+              selected="$candidate"
+              break
+            fi
+          done
+          test -n "$selected"
+          echo "DEVELOPER_DIR=$selected" >> "$GITHUB_ENV"
+          xcodebuild -version
+          xcodebuild -showsdks | tee "$RUNNER_TEMP/iphoneos-sdks.txt"
+          grep -Eq "iphoneos([0-9.]*)?" "$RUNNER_TEMP/iphoneos-sdks.txt"
+
+      - name: Compile unsigned diagnostic app with installed iPhoneOS SDK
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project tools/Libarchive-112522-Diagnostic/Libarchive-112522-Diagnostic.xcodeproj \
+            -target Libarchive-112522-Diagnostic \
+            -configuration Debug \
+            -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/libarchive112522-derived" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Upload unsigned app product
+        uses: actions/upload-artifact@v4
+        with:
+          name: libarchive-112522-diagnostic-unsigned
+          path: ${{ runner.temp }}/libarchive112522-derived/Build/Products/Debug-iphoneos/Libarchive-112522-Diagnostic.app

@@ -1,0 +1,242 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A15200000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15200000000000000000011 /* AppDelegate.swift */; };
+		A15200000000000000000002 /* DiagnosticViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15200000000000000000012 /* DiagnosticViewController.swift */; };
+		A15200000000000000000003 /* ArchiveBridge.c in Sources */ = {isa = PBXBuildFile; fileRef = A15200000000000000000013 /* ArchiveBridge.c */; };
+		A15200000000000000000004 /* control.iso in Resources */ = {isa = PBXBuildFile; fileRef = A15200000000000000000015 /* control.iso */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A15200000000000000000010 /* Libarchive-112522-Diagnostic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Libarchive-112522-Diagnostic.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A15200000000000000000011 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A15200000000000000000012 /* DiagnosticViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticViewController.swift; sourceTree = "<group>"; };
+		A15200000000000000000013 /* ArchiveBridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ArchiveBridge.c; sourceTree = "<group>"; };
+		A15200000000000000000014 /* ArchiveBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ArchiveBridge.h; sourceTree = "<group>"; };
+		A15200000000000000000015 /* control.iso */ = {isa = PBXFileReference; lastKnownFileType = file; path = control.iso; sourceTree = "<group>"; };
+		A15200000000000000000016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A15200000000000000000020 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A15200000000000000000030 = {
+			isa = PBXGroup;
+			children = (
+				A15200000000000000000031 /* DiagnosticApp */,
+				A15200000000000000000033 /* Resources */,
+				A15200000000000000000032 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A15200000000000000000031 /* DiagnosticApp */ = {
+			isa = PBXGroup;
+			children = (
+				A15200000000000000000011 /* AppDelegate.swift */,
+				A15200000000000000000012 /* DiagnosticViewController.swift */,
+				A15200000000000000000013 /* ArchiveBridge.c */,
+				A15200000000000000000014 /* ArchiveBridge.h */,
+				A15200000000000000000016 /* Info.plist */,
+			);
+			path = DiagnosticApp;
+			sourceTree = "<group>";
+		};
+		A15200000000000000000033 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A15200000000000000000015 /* control.iso */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		A15200000000000000000032 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A15200000000000000000010 /* Libarchive-112522-Diagnostic.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A15200000000000000000040 /* Libarchive-112522-Diagnostic */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A15200000000000000000050 /* Target configuration list */;
+			buildPhases = (
+				A15200000000000000000021 /* Sources */,
+				A15200000000000000000020 /* Frameworks */,
+				A15200000000000000000022 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Libarchive-112522-Diagnostic";
+			productName = "Libarchive-112522-Diagnostic";
+			productReference = A15200000000000000000010 /* Libarchive-112522-Diagnostic.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A15200000000000000000041 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					A15200000000000000000040 = {
+						CreatedOnToolsVersion = 2600;
+					};
+				};
+			};
+			buildConfigurationList = A15200000000000000000051 /* Project configuration list */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A15200000000000000000030;
+			productRefGroup = A15200000000000000000032 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A15200000000000000000040 /* Libarchive-112522-Diagnostic */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A15200000000000000000022 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A15200000000000000000004 /* control.iso in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A15200000000000000000021 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A15200000000000000000001 /* AppDelegate.swift in Sources */,
+				A15200000000000000000002 /* DiagnosticViewController.swift in Sources */,
+				A15200000000000000000003 /* ArchiveBridge.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A15200000000000000000060 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				INFOPLIST_FILE = DiagnosticApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.dopamineprivate.Libarchive112522Diagnostic";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = DiagnosticApp/ArchiveBridge.h;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A15200000000000000000061 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				INFOPLIST_FILE = DiagnosticApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.dopamineprivate.Libarchive112522Diagnostic";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OBJC_BRIDGING_HEADER = DiagnosticApp/ArchiveBridge.h;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A15200000000000000000062 /* Project Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		A15200000000000000000063 /* Project Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				SDKROOT = iphoneos;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A15200000000000000000050 /* Target configuration list */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A15200000000000000000060 /* Debug */,
+				A15200000000000000000061 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A15200000000000000000051 /* Project configuration list */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A15200000000000000000062 /* Project Debug */,
+				A15200000000000000000063 /* Project Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = A15200000000000000000041 /* Project object */;
+}
