@@ -7,6 +7,7 @@ private enum DiagnosticState: String {
     case testNotStarted = "TEST_NOT_STARTED"
     case controlArchivePass = "CONTROL_ARCHIVE_PASS"
     case testArchivePass = "TEST_ARCHIVE_PASS"
+    case longPathControlPass = "LONG_PATH_CONTROL_PASS"
     case testArchiveRejected = "TEST_ARCHIVE_REJECTED"
     case testArchiveError = "TEST_ARCHIVE_ERROR"
     case testInterrupted = "TEST_INTERRUPTED"
@@ -96,6 +97,10 @@ private final class ArchiveRenderer {
 
         var kind = [CChar](repeating: 0, count: 64)
         var message = [CChar](repeating: 0, count: 512)
+        var formatName = [CChar](repeating: 0, count: 128)
+        var pathList = [CChar](repeating: 0, count: 8192)
+        var pathCount: UInt64 = 0
+        var maxPathUTF16BEBytes: UInt64 = 0
         var entries: UInt64 = 0
         var bytes: UInt64 = 0
 
@@ -106,15 +111,25 @@ private final class ArchiveRenderer {
         let result = url.path.withCString { path in
             kind.withUnsafeMutableBufferPointer { kindBuffer in
                 message.withUnsafeMutableBufferPointer { messageBuffer in
-                    LAProcessISO(
-                        path,
-                        kindBuffer.baseAddress,
-                        kindBuffer.count,
-                        messageBuffer.baseAddress,
-                        messageBuffer.count,
-                        &entries,
-                        &bytes
-                    )
+                    formatName.withUnsafeMutableBufferPointer { formatBuffer in
+                        pathList.withUnsafeMutableBufferPointer { pathBuffer in
+                            LAProcessISO(
+                                path,
+                                kindBuffer.baseAddress,
+                                kindBuffer.count,
+                                messageBuffer.baseAddress,
+                                messageBuffer.count,
+                                formatBuffer.baseAddress,
+                                formatBuffer.count,
+                                pathBuffer.baseAddress,
+                                pathBuffer.count,
+                                &pathCount,
+                                &maxPathUTF16BEBytes,
+                                &entries,
+                                &bytes
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -124,18 +139,69 @@ private final class ArchiveRenderer {
         let resultMessage = message.withUnsafeBufferPointer { buffer in
             String(cString: buffer.baseAddress!)
         }
+        let resultFormat = formatName.withUnsafeBufferPointer { buffer in
+            String(cString: buffer.baseAddress!)
+        }
+        let observedPaths = pathList.withUnsafeBufferPointer { buffer -> [[String: Any]] in
+            let value = String(cString: buffer.baseAddress!)
+            guard !value.isEmpty else { return [] }
+            return value.split(separator: "\n", omittingEmptySubsequences: true).map { rawPath in
+                let path = String(rawPath)
+                return [
+                    "path": String(path.prefix(256)),
+                    "truncated": path.count > 256,
+                    "utf16be_bytes": path.utf16.count * 2
+                ]
+            }
+        }
+        let pathCaptureTruncated = pathCount > UInt64(observedPaths.count) || observedPaths.contains {
+            ($0["truncated"] as? Bool) == true
+        }
         logger.event("libarchive_complete", details: [
             "label": label,
             "return_code": result,
             "kind": resultKind,
             "message": resultMessage,
+            "format": resultFormat.isEmpty ? "unknown" : resultFormat,
             "entries": entries,
-            "bytes": bytes
+            "bytes": bytes,
+            "path_count": pathCount,
+            "max_path_utf16be_bytes": maxPathUTF16BEBytes,
+            "paths": observedPaths,
+            "path_capture_capacity": 8192,
+            "path_capture_truncated": pathCaptureTruncated
+        ])
+
+        if !resultFormat.isEmpty {
+            logger.event("archive_format_recognized", details: [
+                "classification": "ARCHIVE_FORMAT_RECOGNIZED",
+                "format": resultFormat
+            ])
+        }
+        if result == 0 && pathCount > 0 {
+            logger.event("joliet_entries_observed", details: [
+                "classification": resultKind == "LONG_PATH_CONTROL_PASS"
+                    ? "LONG_PATH_CONTROL_PASS"
+                    : "JOLIET_ENTRIES_OBSERVED",
+                "path_count": pathCount,
+                "max_path_utf16be_bytes": maxPathUTF16BEBytes
+            ])
+        }
+        logger.event("runtime_function_invocation_not_proven", details: [
+            "classification": "RUNTIME_FUNCTION_INVOCATION_NOT_PROVEN",
+            "function": "_build_pathname_utf16be",
+            "reason": "public libarchive API observations do not identify an internal instruction"
         ])
 
         if result == 0 {
-            logger.setState(stateOnPass, details: ["label": label, "entries": entries])
-            return stateOnPass
+            let finalState = resultKind == "LONG_PATH_CONTROL_PASS" ? .longPathControlPass : stateOnPass
+            logger.setState(finalState, details: [
+                "label": label,
+                "entries": entries,
+                "max_path_utf16be_bytes": maxPathUTF16BEBytes,
+                "classification": resultKind
+            ])
+            return finalState
         }
         if result == 1 {
             logger.setState(.testArchiveRejected, details: ["label": label, "kind": resultKind])
@@ -235,9 +301,25 @@ final class DiagnosticViewController: UIViewController, UIDocumentPickerDelegate
                 try FileManager.default.removeItem(at: destination)
             }
             try FileManager.default.copyItem(at: sourceURL, to: destination)
+            let inputData = try Data(contentsOf: destination)
+            let inputSHA = SHA256.hash(data: inputData).map { String(format: "%02x", $0) }.joined()
+            let runKey = "manual-run-sha256-\(inputSHA)"
+            if UserDefaults.standard.bool(forKey: runKey) {
+                logger.event("manual_repetition_blocked", details: [
+                    "sha256": inputSHA,
+                    "reason": "one manual attempt per file"
+                ])
+                statusLabel.text = "TEST_NOT_STARTED\nCe fichier a déjà été essayé dans cette installation"
+                controlButton.isEnabled = true
+                manualButton.isEnabled = true
+                return
+            }
+            UserDefaults.standard.set(true, forKey: runKey)
             logger.setState(.testInterrupted, details: [
                 "reason": "pre-libarchive marker; not a crash classification",
-                "input": destination.lastPathComponent
+                "input": destination.lastPathComponent,
+                "sha256": inputSHA,
+                "manual_attempt_policy": "one attempt per file"
             ])
             let state = renderer.process(url: destination, label: "manual", stateOnPass: .testArchivePass)
             statusLabel.text = message(for: state)
@@ -255,6 +337,8 @@ final class DiagnosticViewController: UIViewController, UIDocumentPickerDelegate
         switch state {
         case .testArchivePass:
             return "TEST_ARCHIVE_PASS\nLe fichier a été accepté et parcouru"
+        case .longPathControlPass:
+            return "LONG_PATH_CONTROL_PASS\nChemin Joliet long accepté dans la limite contrôlée"
         case .testArchiveRejected:
             return "TEST_ARCHIVE_REJECTED\nRejet contrôlé par libarchive"
         case .testArchiveError:

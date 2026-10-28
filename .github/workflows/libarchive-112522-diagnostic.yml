@@ -16,6 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate V5 ISO controls offline
+        run: |
+          set -euo pipefail
+          python3 tools/Libarchive-112522-Diagnostic/verify_v5_controls.py \
+            | tee "$RUNNER_TEMP/libarchive-v5-controls.json"
+          if command -v isovfy >/dev/null 2>&1; then
+            echo "isovfy is available on the runner"
+          else
+            echo "isovfy is not installed; dependency-free validation remains required"
+          fi
+
       - name: Select Xcode 26 installation
         run: |
           set -euo pipefail
@@ -51,5 +62,7 @@ jobs:
       - name: Upload unsigned app product
         uses: actions/upload-artifact@v4
         with:
-          name: libarchive-112522-diagnostic-unsigned
-          path: ${{ runner.temp }}/libarchive112522-derived/Build/Products/Release-iphoneos/Libarchive-112522-Diagnostic.app
+          name: libarchive-112522-diagnostic-v5-unsigned
+          path: |
+            ${{ runner.temp }}/libarchive112522-derived/Build/Products/Release-iphoneos/Libarchive-112522-Diagnostic.app
+            tools/Libarchive-112522-Diagnostic/Resources/v5-controls

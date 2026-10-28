@@ -15,6 +15,7 @@ typedef int (*archive_read_next_header_fn)(archive_t *, archive_entry_t **);
 typedef int (*archive_read_data_skip_fn)(archive_t *);
 typedef int (*archive_read_free_fn)(archive_t *);
 typedef const char *(*archive_error_string_fn)(archive_t *);
+typedef const char *(*archive_format_name_fn)(archive_t *);
 typedef const char *(*archive_entry_pathname_utf8_fn)(archive_entry_t *);
 typedef int64_t (*archive_entry_size_fn)(archive_entry_t *);
 
@@ -56,11 +57,84 @@ static void *load_symbol(void *handle, const char *name) {
     return dlsym(handle, name);
 }
 
+static uint64_t utf16be_byte_length(const char *value) {
+    const unsigned char *bytes = (const unsigned char *)value;
+    uint64_t units = 0;
+    size_t index = 0;
+    if (value == NULL) {
+        return 0;
+    }
+    while (bytes[index] != 0) {
+        uint32_t codepoint = 0xfffd;
+        unsigned char first = bytes[index++];
+        if (first < 0x80) {
+            codepoint = first;
+        } else if ((first & 0xe0) == 0xc0 && bytes[index] != 0) {
+            unsigned char second = bytes[index++];
+            if ((second & 0xc0) == 0x80) {
+                codepoint = ((uint32_t)(first & 0x1f) << 6) | (second & 0x3f);
+            }
+        } else if ((first & 0xf0) == 0xe0 && bytes[index] != 0 && bytes[index + 1] != 0) {
+            unsigned char second = bytes[index++];
+            unsigned char third = bytes[index++];
+            if ((second & 0xc0) == 0x80 && (third & 0xc0) == 0x80) {
+                codepoint = ((uint32_t)(first & 0x0f) << 12) |
+                    ((uint32_t)(second & 0x3f) << 6) | (third & 0x3f);
+            }
+        } else if ((first & 0xf8) == 0xf0 && bytes[index] != 0 &&
+                   bytes[index + 1] != 0 && bytes[index + 2] != 0) {
+            unsigned char second = bytes[index++];
+            unsigned char third = bytes[index++];
+            unsigned char fourth = bytes[index++];
+            if ((second & 0xc0) == 0x80 && (third & 0xc0) == 0x80 &&
+                (fourth & 0xc0) == 0x80) {
+                codepoint = ((uint32_t)(first & 0x07) << 18) |
+                    ((uint32_t)(second & 0x3f) << 12) |
+                    ((uint32_t)(third & 0x3f) << 6) | (fourth & 0x3f);
+            }
+        }
+        units += codepoint > 0xffff ? 2 : 1;
+    }
+    return units * 2;
+}
+
+static void append_path(char *destination,
+                        size_t capacity,
+                        size_t *used,
+                        const char *path) {
+    if (destination == NULL || used == NULL || capacity == 0 || path == NULL || path[0] == '\0') {
+        return;
+    }
+    size_t available = *used < capacity ? capacity - *used - 1 : 0;
+    if (available == 0) {
+        return;
+    }
+    if (*used != 0) {
+        destination[(*used)++] = '\n';
+        available -= 1;
+    }
+    for (size_t index = 0; path[index] != '\0' && available != 0; index++) {
+        unsigned char byte = (unsigned char)path[index];
+        if (byte == '\n' || byte == '\r' || byte == '\t') {
+            byte = ' ';
+        }
+        destination[(*used)++] = (char)byte;
+        available -= 1;
+    }
+    destination[*used] = '\0';
+}
+
 int32_t LAProcessISO(const char *path,
                      char *kind,
                      size_t kindCapacity,
                      char *message,
                      size_t messageCapacity,
+                     char *formatName,
+                     size_t formatNameCapacity,
+                     char *pathList,
+                     size_t pathListCapacity,
+                     uint64_t *pathCount,
+                     uint64_t *maxPathUTF16BEBytes,
                      uint64_t *entryCount,
                      uint64_t *totalBytes) {
     if (entryCount != NULL) {
@@ -68,6 +142,18 @@ int32_t LAProcessISO(const char *path,
     }
     if (totalBytes != NULL) {
         *totalBytes = 0;
+    }
+    if (pathCount != NULL) {
+        *pathCount = 0;
+    }
+    if (maxPathUTF16BEBytes != NULL) {
+        *maxPathUTF16BEBytes = 0;
+    }
+    if (formatName != NULL && formatNameCapacity != 0) {
+        formatName[0] = '\0';
+    }
+    if (pathList != NULL && pathListCapacity != 0) {
+        pathList[0] = '\0';
     }
     set_kind(kind, kindCapacity, "APP_ERROR");
     set_text(message, messageCapacity, "not started");
@@ -102,6 +188,8 @@ int32_t LAProcessISO(const char *path,
         (archive_read_free_fn)load_symbol(handle, "archive_read_free");
     archive_error_string_fn error_string =
         (archive_error_string_fn)load_symbol(handle, "archive_error_string");
+    archive_format_name_fn format_name =
+        (archive_format_name_fn)load_symbol(handle, "archive_format_name");
     archive_entry_pathname_utf8_fn pathname_utf8 =
         (archive_entry_pathname_utf8_fn)load_symbol(handle, "archive_entry_pathname_utf8");
     archive_entry_size_fn entry_size =
@@ -155,16 +243,28 @@ int32_t LAProcessISO(const char *path,
         return LA_DIAGNOSTIC_REJECTED;
     }
 
+    set_kind(kind, kindCapacity, "ARCHIVE_FORMAT_RECOGNIZED");
+    set_text(formatName, formatNameCapacity,
+             format_name != NULL ? format_name(archive) : "ISO9660/Joliet");
+    size_t pathListUsed = 0;
+
     uint64_t entries = 0;
     uint64_t bytes = 0;
-    char firstPath[160] = {0};
     archive_entry_t *entry = NULL;
     while ((status = next_header(archive, &entry)) == ARCHIVE_OK) {
+        if (format_name != NULL && formatName != NULL && formatName[0] == '\0') {
+            set_text(formatName, formatNameCapacity, format_name(archive));
+        }
         entries += 1;
         const char *entryPath = pathname_utf8(entry);
-        if (entries == 1 && entryPath != NULL) {
-            snprintf(firstPath, sizeof(firstPath), "%s", entryPath);
+        uint64_t pathBytes = utf16be_byte_length(entryPath);
+        if (pathCount != NULL) {
+            *pathCount = entries;
         }
+        if (maxPathUTF16BEBytes != NULL && pathBytes > *maxPathUTF16BEBytes) {
+            *maxPathUTF16BEBytes = pathBytes;
+        }
+        append_path(pathList, pathListCapacity, &pathListUsed, entryPath);
         int64_t size = entry_size(entry);
         if (size > 0) {
             bytes += (uint64_t)size;
@@ -195,11 +295,18 @@ int32_t LAProcessISO(const char *path,
         return LA_DIAGNOSTIC_REJECTED;
     }
 
-    set_kind(kind, kindCapacity, "ARCHIVE_PASS");
-    snprintf(message, messageCapacity, "entries=%llu bytes=%llu first=%s",
+    if (entries != 0 && maxPathUTF16BEBytes != NULL && *maxPathUTF16BEBytes >= 512) {
+        set_kind(kind, kindCapacity, "LONG_PATH_CONTROL_PASS");
+    } else if (entries != 0) {
+        set_kind(kind, kindCapacity, "JOLIET_ENTRIES_OBSERVED");
+    } else {
+        set_kind(kind, kindCapacity, "ARCHIVE_FORMAT_RECOGNIZED");
+    }
+    snprintf(message, messageCapacity, "entries=%llu bytes=%llu paths=%llu max_utf16be=%llu",
              (unsigned long long)entries,
              (unsigned long long)bytes,
-             firstPath[0] != '\0' ? firstPath : "none");
+             (unsigned long long)(pathCount != NULL ? *pathCount : entries),
+             (unsigned long long)(maxPathUTF16BEBytes != NULL ? *maxPathUTF16BEBytes : 0));
     read_free(archive);
     dlclose(handle);
     return LA_DIAGNOSTIC_PASS;

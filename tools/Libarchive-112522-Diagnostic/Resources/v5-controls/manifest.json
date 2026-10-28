@@ -1,0 +1,37 @@
+[
+  {
+    "file": "V5-A-simple.iso",
+    "bytes": 71680,
+    "sectors": 35,
+    "sha256": "6f763d448d0088fd2940e673a1f8e0f5582627f54516b74ca5ac2d7af6894ae8",
+    "expected_paths": [
+      "README.TXT",
+      "CHECKSUM.TXT"
+    ],
+    "max_expected_utf16be_bytes": 24,
+    "malformed_payload": false
+  },
+  {
+    "file": "V5-B-multilevel.iso",
+    "bytes": 83968,
+    "sectors": 41,
+    "sha256": "6a3123b3d8b959bd7edb594ca139f0f174c4bc8e57a29883c614e7b5bf166dd5",
+    "expected_paths": [
+      "ROOT.TXT",
+      "LEVEL-1/LEVEL-2/LEVEL-3/DEEP.TXT"
+    ],
+    "max_expected_utf16be_bytes": 64,
+    "malformed_payload": false
+  },
+  {
+    "file": "V5-C-long-safe-path.iso",
+    "bytes": 86016,
+    "sectors": 42,
+    "sha256": "7f5bbd6f5873184b342c9cfc0c2eec62ca33b9ced3dcaa1e9707423ea0ed012b",
+    "expected_paths": [
+      "L1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/L2BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB/L3CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC/L4DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD/FXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.TXT"
+    ],
+    "max_expected_utf16be_bytes": 976,
+    "malformed_payload": false
+  }
+]

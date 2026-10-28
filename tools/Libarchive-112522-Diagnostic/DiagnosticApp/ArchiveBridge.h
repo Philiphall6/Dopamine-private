@@ -16,6 +16,12 @@ int32_t LAProcessISO(const char *path,
                      size_t kindCapacity,
                      char *message,
                      size_t messageCapacity,
+                     char *formatName,
+                     size_t formatNameCapacity,
+                     char *pathList,
+                     size_t pathListCapacity,
+                     uint64_t *pathCount,
+                     uint64_t *maxPathUTF16BEBytes,
                      uint64_t *entryCount,
                      uint64_t *totalBytes);
 
