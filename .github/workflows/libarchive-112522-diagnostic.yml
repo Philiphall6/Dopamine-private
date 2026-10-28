@@ -41,7 +41,7 @@ jobs:
           xcodebuild \
             -project tools/Libarchive-112522-Diagnostic/Libarchive-112522-Diagnostic.xcodeproj \
             -scheme Libarchive-112522-Diagnostic \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphoneos \
             -derivedDataPath "$RUNNER_TEMP/libarchive112522-derived" \
             CODE_SIGNING_ALLOWED=NO \
@@ -52,4 +52,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: libarchive-112522-diagnostic-unsigned
-          path: ${{ runner.temp }}/libarchive112522-derived/Build/Products/Debug-iphoneos/Libarchive-112522-Diagnostic.app
+          path: ${{ runner.temp }}/libarchive112522-derived/Build/Products/Release-iphoneos/Libarchive-112522-Diagnostic.app
