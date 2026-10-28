@@ -40,11 +40,16 @@ Une simple absence de réponse ne constitue jamais un crash confirmé.
 Le générateur déterministe est `generate_v5_controls.py`. Il produit trois
 ISO structurellement valides dans `Resources/v5-controls/` :
 
+Les descripteurs PVD/SVD déclarent explicitement la version de structure
+ISO9660/ECMA-119 `1`; le validateur contrôle aussi cette valeur et les champs
+réservés afin qu'un rejet de format ne soit pas confondu avec un résultat
+Joliet.
+
 | Fichier | Objet | Octets UTF-16BE maximum | SHA-256 |
 | --- | --- | ---: | --- |
-| `V5-A-simple.iso` | contrôle simple | 24 | `6f763d448d0088fd2940e673a1f8e0f5582627f54516b74ca5ac2d7af6894ae8` |
-| `V5-B-multilevel.iso` | plusieurs niveaux | 64 | `6a3123b3d8b959bd7edb594ca139f0f174c4bc8e57a29883c614e7b5bf166dd5` |
-| `V5-C-long-safe-path.iso` | chemin long sous 1024 octets | 976 | `7f5bbd6f5873184b342c9cfc0c2eec62ca33b9ced3dcaa1e9707423ea0ed012b` |
+| `V5-A-simple.iso` | contrôle simple | 24 | `0101636e7e538bc756682c3b8711096e388f8afe00e08287543231beb3024412` |
+| `V5-B-multilevel.iso` | plusieurs niveaux | 64 | `560a437d6681f0e65ad4163d47ecc53fc971813f550feab9c6fa86125e36df4f` |
+| `V5-C-long-safe-path.iso` | chemin long sous 1024 octets | 976 | `7ffbfd3f7c3190fe079d7d1b210c7085a02ceb0a709cf2d522702d7f753954e3` |
 
 La vérification hors ligne est sans dépendance Python externe :
 

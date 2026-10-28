@@ -130,6 +130,10 @@ def validate(path: Path) -> dict[str, object]:
         raise AssertionError("missing Joliet SVD")
     if terminator[0:7] != b"\xffCD001\x01":
         raise AssertionError("missing volume descriptor terminator")
+    if pvd[881] != 1 or pvd[882] != 0 or any(pvd[1395:]):
+        raise AssertionError("invalid PVD file-structure or reserved fields")
+    if svd[881] != 1 or svd[882] != 0 or any(svd[1395:]):
+        raise AssertionError("invalid SVD file-structure or reserved fields")
     sectors = len(data) // SECTOR
     pvd_sectors, _ = both(pvd, 80, 4)
     svd_sectors, _ = both(svd, 80, 4)

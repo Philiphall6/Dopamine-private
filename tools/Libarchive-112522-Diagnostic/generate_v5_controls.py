@@ -176,6 +176,7 @@ def descriptor(
     block[446:574] = b"Dopamine-private".ljust(128, b" ")
     block[574:702] = b"CVE-2026-112522 diagnostic".ljust(128, b" ")
     block[702:739] = b"2026102800000000".ljust(37, b"0")
+    block[881] = 1  # ISO9660/ECMA-119 file structure version.
     return bytes(block)
 
 
