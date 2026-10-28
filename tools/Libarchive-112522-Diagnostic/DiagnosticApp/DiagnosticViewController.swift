@@ -151,7 +151,6 @@ private final class ArchiveRenderer {
 }
 
 final class DiagnosticViewController: UIViewController, UIDocumentPickerDelegate {
-    private let testRunKey = "CVE-2026-112522.test-run-started"
     private let logger = DiagnosticLogger()
     private lazy var renderer = ArchiveRenderer(logger: logger)
     private let statusLabel = UILabel()
@@ -169,7 +168,7 @@ final class DiagnosticViewController: UIViewController, UIDocumentPickerDelegate
         statusLabel.numberOfLines = 0
         statusLabel.textAlignment = .center
         statusLabel.text = previousState == DiagnosticState.testInterrupted.rawValue
-            ? "TEST_INTERRUPTED\nRécupérer le journal et un éventuel .ips avant toute nouvelle installation."
+            ? "TEST_INTERRUPTED\nRécupérer le journal et un éventuel .ips avant de relancer si l'application s'est fermée."
             : "Contrôle ISO normal avant le test manuel.\nAucun fichier manuel n'est lancé automatiquement."
 
         configure(controlButton, title: "Contrôle ISO normal", action: #selector(runControl))
@@ -203,10 +202,6 @@ final class DiagnosticViewController: UIViewController, UIDocumentPickerDelegate
     }
 
     @objc private func chooseManualFile() {
-        guard !UserDefaults.standard.bool(forKey: testRunKey) else {
-            showMessage(title: "Test déjà lancé", message: "Cette installation a déjà traité un fichier manuel. Consultez le journal et un éventuel rapport .ips avant toute nouvelle tentative.")
-            return
-        }
         logger.event("manual_picker_open")
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
         picker.delegate = self
@@ -217,8 +212,8 @@ final class DiagnosticViewController: UIViewController, UIDocumentPickerDelegate
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let sourceURL = urls.first else { return }
         let alert = UIAlertController(
-            title: "Test manuel unique",
-            message: "Le fichier choisi sera remis à libarchive une seule fois. L'application ne génère aucun fichier malformé et ne relancera pas le test après une fermeture.",
+            title: "Test manuel",
+            message: "Le fichier choisi sera remis à libarchive après confirmation. L'application ne génère aucun fichier malformé et ne relance pas automatiquement le test après une fermeture.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Annuler", style: .cancel))
@@ -229,7 +224,6 @@ final class DiagnosticViewController: UIViewController, UIDocumentPickerDelegate
     }
 
     private func runManualFile(_ sourceURL: URL) {
-        UserDefaults.standard.set(true, forKey: testRunKey)
         controlButton.isEnabled = false
         manualButton.isEnabled = false
         statusLabel.text = "TEST_INTERRUPTED\nMarqueur écrit avant libarchive…"
@@ -274,12 +268,6 @@ final class DiagnosticViewController: UIViewController, UIDocumentPickerDelegate
         logger.event("log_export_requested")
         let controller = UIActivityViewController(activityItems: [logger.logFileURL, logger.stateFileURL], applicationActivities: nil)
         present(controller, animated: true)
-    }
-
-    private func showMessage(title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
     }
 
     private func configure(_ button: UIButton, title: String, action: Selector) {

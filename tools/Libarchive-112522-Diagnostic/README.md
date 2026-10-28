@@ -20,7 +20,7 @@ Le dyld cache exact 23A355 exporte les symboles utilisés par le pont :
 - traite une ISO9660/Joliet normale embarquée comme contrôle ;
 - permet de choisir manuellement un fichier ISO depuis Fichiers ;
 - n'intègre aucun fichier malformé et n'en génère aucun ;
-- arme le test manuel une seule fois par installation ;
+- permet plusieurs lancements manuels, chacun après confirmation explicite ;
 - écrit un journal JSONL avant, pendant et après l'appel à libarchive ;
 - conserve un marqueur `TEST_INTERRUPTED` avant le traitement manuel afin de
   corréler une fermeture avec un éventuel rapport `.ips`.
@@ -39,15 +39,16 @@ Le workflow `.github/workflows/libarchive-112522-diagnostic.yml` effectue une
 compilation non signée avec le SDK iPhoneOS installé par Xcode. Il ne lance
 aucun fichier de test.
 
-## Procédure manuelle unique
+## Procédure manuelle
 
 1. Installer l'application signée sur l'iPhone de test.
 2. Lancer **Contrôle ISO normal** et vérifier `CONTROL_ARCHIVE_PASS`.
 3. Exporter les journaux si le contrôle échoue.
 4. Préparer séparément le fichier de référence autorisé pour l'essai manuel.
-5. Utiliser **Choisir un ISO (manuel)** et confirmer une seule fois.
-6. Ne pas relancer après une fermeture. Récupérer d'abord le journal et le
-   rapport système.
+5. Utiliser **Choisir un ISO (manuel)** et confirmer le lancement.
+6. Pour une nouvelle observation, relancer manuellement depuis le bouton et
+   confirmer à nouveau. Aucune relance automatique n'est effectuée après une
+   fermeture ; récupérer d'abord le journal et le rapport système.
 
 Les journaux sont dans le conteneur de l'application :
 
