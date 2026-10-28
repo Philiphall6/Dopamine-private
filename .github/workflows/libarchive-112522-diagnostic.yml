@@ -59,10 +59,19 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
 
-      - name: Upload unsigned app product
+      - name: Stage unsigned app and V5 controls
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/libarchive112522-artifact"
+          rm -rf "$artifact_dir"
+          mkdir -p "$artifact_dir"
+          cp -R "$RUNNER_TEMP/libarchive112522-derived/Build/Products/Release-iphoneos/Libarchive-112522-Diagnostic.app" \
+            "$artifact_dir/Libarchive-112522-Diagnostic.app"
+          cp -R tools/Libarchive-112522-Diagnostic/Resources/v5-controls \
+            "$artifact_dir/v5-controls"
+
+      - name: Upload unsigned app product and V5 controls
         uses: actions/upload-artifact@v4
         with:
           name: libarchive-112522-diagnostic-v5-unsigned
-          path: |
-            ${{ runner.temp }}/libarchive112522-derived/Build/Products/Release-iphoneos/Libarchive-112522-Diagnostic.app
-            tools/Libarchive-112522-Diagnostic/Resources/v5-controls
+          path: ${{ runner.temp }}/libarchive112522-artifact
