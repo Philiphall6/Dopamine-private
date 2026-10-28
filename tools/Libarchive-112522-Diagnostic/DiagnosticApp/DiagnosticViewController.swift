@@ -60,7 +60,7 @@ private final class DiagnosticLogger {
             return
         }
         defer { try? handle.close() }
-        try? handle.seekToEnd()
+        _ = try? handle.seekToEnd()
         try? handle.write(contentsOf: Data(line.utf8))
         try? handle.synchronize()
     }
@@ -133,11 +133,11 @@ private final class ArchiveRenderer {
             "bytes": bytes
         ])
 
-        if result == LA_DIAGNOSTIC_PASS {
+        if result == 0 {
             logger.setState(stateOnPass, details: ["label": label, "entries": entries])
             return stateOnPass
         }
-        if result == LA_DIAGNOSTIC_REJECTED {
+        if result == 1 {
             logger.setState(.testArchiveRejected, details: ["label": label, "kind": resultKind])
             return .testArchiveRejected
         }
